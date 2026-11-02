@@ -34,6 +34,8 @@ godot --headless --path client --export-debug Linux ../build/grimreach-linux.x86
 
 The server exposes `http://127.0.0.1:8081/health` for a basic health and player-count check.
 
+The world covers coordinates from -8192 to +8192 on each horizontal axis. The client streams a 5-by-5 set of 48-unit terrain regions around the player and regenerates them deterministically from seed `76341`. The server continues to own player movement. Run the region smoke check with `godot --headless --path client --script res://tests/terrain_smoke.gd`.
+
 ## Run on Android over ADB
 
 With the Linux server running and an Android phone connected through ADB:
