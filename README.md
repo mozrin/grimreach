@@ -38,7 +38,9 @@ The world covers coordinates from -8192 to +8192 on each horizontal axis. The cl
 
 Nearby regions contain tree cover, stone outcrops, grass, and flower patches. Broad ridges and rolling hills vary the ground height; wet, meadow, and dry climates give regions different vegetation colors and grass heights. An ancient stone courtyard stands northeast of spawn, with further ruins every seven regions in each direction. Terrain and decoration placement are deterministic and unload with each region.
 
-The opening area has three destinations: the Fallen Court, Wayfarer Camp, and Old Star Shrine. Sandy routes lead out from spawn, and a wider route grid continues across the world. Camps, shrines, and courts recur at deterministic region coordinates with stable IDs. Solid tents, shrines, and walls are blocked by the Linux server; the site grounds and routes remain walkable.
+The opening area has three destinations: the Fallen Court, Wayfarer Camp, and Old Star Shrine. Sandy routes lead out from spawn, and a wider route grid continues across the world. Camps, shrines, and courts recur with varied names at deterministic region coordinates and stable IDs. Solid tents, shrines, and walls are blocked by the Linux server; the site grounds and routes remain walkable.
+
+Approaching a site records it in a local exploration journal. Tap **Journal** to see starting leads, bearings, distances, discoveries, and findings. A nearby **Examine** button reveals a short story and records a finding once per site; press F on Ubuntu. The journal persists in Godot's per-user application data and supports light and dark views. Open views stop player movement until Back returns to the world. Check the journal contract with `godot --headless --path client --script res://tests/journal_smoke.gd`.
 
 The Linux server mirrors the solid placement rules for tree trunks, stone outcrops, and ruin walls. It rejects movement through those objects and lets the character slide along their edges. Grass, flowers, and ruin floors remain walkable.
 

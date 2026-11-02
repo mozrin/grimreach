@@ -154,7 +154,18 @@ func _site_for_chunk(key: Vector2i) -> Dictionary:
 	var offset := 19.0 if kind == "ruin" else 24.0
 	var position := Vector3(key.x * CHUNK_SIZE + offset, 0, key.y * CHUNK_SIZE + offset)
 	position.y = height_at(position.x, position.z)
-	var title: String = {"ruin": "Fallen Court", "camp": "Wayfarer Camp", "shrine": "Old Star Shrine"}[kind]
+	var names := {
+		"ruin": ["Fallen Court", "Ashen Court", "Mossgate Ruins"],
+		"camp": ["Wayfarer Camp", "Cinder Camp", "Southwind Camp"],
+		"shrine": ["Old Star Shrine", "Moonwell Shrine", "Stonewatch Shrine"],
+	}
+	var title: String = names[kind][_hash(key.x, key.y, 61) % 3]
+	if key == Vector2i.ZERO:
+		title = "Fallen Court"
+	elif key == Vector2i(-1, -1):
+		title = "Wayfarer Camp"
+	elif key == Vector2i(0, -1):
+		title = "Old Star Shrine"
 	return {"id": "%s:%d:%d" % [kind, key.x, key.y], "kind": kind, "name": title, "position": position}
 
 
