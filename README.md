@@ -38,6 +38,8 @@ The world covers coordinates from -8192 to +8192 on each horizontal axis. The cl
 
 Nearby regions contain tree cover, stone outcrops, grass, and flower patches. Broad ridges and rolling hills vary the ground height; wet, meadow, and dry climates give regions different vegetation colors and grass heights. An ancient stone courtyard stands northeast of spawn, with further ruins every seven regions in each direction. Terrain and decoration placement are deterministic and unload with each region.
 
+The opening area has three destinations: the Fallen Court, Wayfarer Camp, and Old Star Shrine. Sandy routes lead out from spawn, and a wider route grid continues across the world. Camps, shrines, and courts recur at deterministic region coordinates with stable IDs. Solid tents, shrines, and walls are blocked by the Linux server; the site grounds and routes remain walkable.
+
 The Linux server mirrors the solid placement rules for tree trunks, stone outcrops, and ruin walls. It rejects movement through those objects and lets the character slide along their edges. Grass, flowers, and ruin floors remain walkable.
 
 The explorer turns toward travel and swings arms and legs while walking. A purple dragon circles above the land north of spawn; more can appear across distant regions. Dragon wings flap and the creature bobs in flight. These are exploratory visual models built from original primitives; interaction and combat remain future work.
