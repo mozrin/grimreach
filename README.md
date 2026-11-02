@@ -42,7 +42,7 @@ With the Linux server running and an Android phone connected through ADB:
 adb reverse tcp:7777 tcp:7777
 godot --headless --path client --export-debug Android ../build/grimreach-android.apk
 adb install -r build/grimreach-android.apk
-adb shell am start -n com.mozrin.grimreach/com.godot.game.GodotApp
+adb shell monkey -p com.mozrin.grimreach 1
 ```
 
 The ADB reverse command makes the phone's `127.0.0.1:7777` reach the Linux server. The four touch buttons move the character; dragging on the right side turns the camera. For use without ADB, enter the Linux server's reachable IP address in the client.
