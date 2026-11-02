@@ -100,8 +100,7 @@ func _populate_chunk(root: Node3D, key: Vector2i) -> void:
 			if Vector2(x, z).length() < 7.0:
 				continue
 			var place := Vector3(x, height_at(x, z), z)
-			var moisture := climate.get_noise_2d(x, z)
-			var tree_limit := 15 if moisture > 0.1 else 7
+			var tree_limit := 7 + _hash(floori(float(grid_x) / 24.0), floori(float(grid_z) / 24.0), 7) % 9
 			var choice := _hash(grid_x, grid_z, 11) % 100
 			for tuft in range(3):
 				var shift_x := float(_hash(grid_x, grid_z, 70 + tuft) % 300) / 100.0 - 1.5

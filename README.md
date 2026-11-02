@@ -38,6 +38,8 @@ The world covers coordinates from -8192 to +8192 on each horizontal axis. The cl
 
 Nearby regions contain climate-dependent tree cover, stone outcrops, grass, and flower patches. An ancient stone courtyard stands northeast of spawn, with further ruins every seven regions in each direction. Decoration placement is deterministic and unloads with its region.
 
+The Linux server mirrors the solid placement rules for tree trunks, stone outcrops, and ruin walls. It rejects movement through those objects and lets the character slide along their edges. Grass, flowers, and ruin floors remain walkable.
+
 ## Run on Android over ADB
 
 With the Linux server running and an Android phone connected through ADB:

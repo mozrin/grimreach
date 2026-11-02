@@ -164,8 +164,18 @@ func (w *world) run() {
 			if length > 1 {
 				dx, dz = dx/length, dz/length
 			}
-			avatar.X = math.Max(-worldLimit, math.Min(worldLimit, avatar.X+dx*0.4))
-			avatar.Z = math.Max(-worldLimit, math.Min(worldLimit, avatar.Z+dz*0.4))
+			nextX := avatar.X + dx*0.4
+			nextZ := avatar.Z + dz*0.4
+			if !blockedPosition(nextX, nextZ) {
+				avatar.X, avatar.Z = nextX, nextZ
+			} else {
+				if !blockedPosition(nextX, avatar.Z) {
+					avatar.X = nextX
+				}
+				if !blockedPosition(avatar.X, nextZ) {
+					avatar.Z = nextZ
+				}
+			}
 			players = append(players, *avatar)
 		}
 		for p := range w.peers {
