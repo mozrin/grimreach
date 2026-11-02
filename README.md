@@ -48,7 +48,7 @@ Glowing mineral veins also appear across streamed regions, with one close to spa
 
 The Linux server mirrors the solid placement rules for tree trunks, stone outcrops, and ruin walls. It rejects movement through those objects and lets the character slide along their edges. Grass, flowers, and ruin floors remain walkable.
 
-The explorer turns toward travel and swings arms and legs while walking. A purple dragon circles above the land north of spawn; more can appear across distant regions. Dragon wings flap and the creature bobs in flight. These are exploratory visual models built from original primitives; interaction and combat remain future work.
+The explorer is an original procedural humanoid with a face, clothing, articulated arms and legs, hands, and boots. Walking blends into alternating steps, knee and elbow bends, body sway, and a gentle rise and fall; stopping eases back to idle. The client smooths rendered positions and facing between authoritative server updates while the server still owns movement and collision. A purple dragon circles above the land north of spawn; more can appear across distant regions. Dragon wings flap and the creature bobs in flight. These are exploratory visual models built from original primitives; interaction and combat remain future work. Check the character contract with `godot --headless --path client --script res://tests/explorer_smoke.gd`.
 
 ## Run on Android over ADB
 
