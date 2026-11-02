@@ -1,6 +1,6 @@
 # Grimreach
 
-Grimreach is an original, player-built fantasy world. This first proof of concept tests a native third-person 3D client against an authoritative Linux world server, with a separate live analytics client. It uses no code or assets from the older Grimreach repositories or Star Wars Galaxies projects.
+Grimreach is an original fantasy-world prototype. A native third-person 3D client runs on Ubuntu and Android against an authoritative Linux world server, with a separate live analytics client. The current version is recorded in `VERSION`. This codebase uses no code or assets from the older Grimreach repositories or Star Wars Galaxies projects.
 
 ## Requirements
 
@@ -46,7 +46,7 @@ Approaching a site records it in a local exploration journal. Tap **Journal** to
 
 Glowing mineral veins also appear across streamed regions, with one close to spawn. Move near a vein and tap **Survey** to see its stable name and conductivity, hardness, malleability, and purity values (100–1000). **Collect sample** adds that exact variant to the local journal; the same vein refreshes after 60 seconds. Samples and cooldowns survive client restarts. This is a first exploration activity; extraction machines, trading, crafting effects, and server-persistent inventories are later work. Check deterministic vein identities and quality with `godot --headless --path client --script res://tests/veins_smoke.gd`.
 
-The Linux server mirrors the solid placement rules for tree trunks, stone outcrops, and ruin walls. It rejects movement through those objects and lets the character slide along their edges. Grass, flowers, and ruin floors remain walkable.
+The Linux server mirrors the solid placement rules for tree trunks, stone outcrops, mineral veins, camp tents, Edda, shrine pillars, and ruin walls. It rejects movement through those objects and lets the character slide along their edges. Grass, flowers, paths, and ruin floors remain walkable.
 
 The explorer is an original procedural humanoid with a face, clothing, articulated arms and legs, hands, and boots. Walking blends into alternating steps, knee and elbow bends, body sway, and a gentle rise and fall; stopping eases back to idle. The client smooths rendered positions and facing between authoritative server updates while the server still owns movement and collision. A purple dragon circles above the land north of spawn; more can appear across distant regions. Dragon wings flap and the creature bobs in flight. These are exploratory visual models built from original primitives; interaction and combat remain future work. Check the character contract with `godot --headless --path client --script res://tests/explorer_smoke.gd`.
 
@@ -63,8 +63,8 @@ adb shell monkey -p com.mozrin.grimreach 1
 
 The ADB reverse command makes the phone's `127.0.0.1:7777` reach the Linux server. In portrait mode, touch open world space and drag in the direction you want to walk. A temporary joystick appears under your thumb; release to stop. Drag with a second finger to turn the camera. For use without ADB, enter the Linux server's reachable IP address in the client.
 
-## Proof-of-concept verification
+## Verification and current limits
 
-On Ubuntu 24.04, the Go server accepted Godot clients, its health endpoint reported connected players, and the separate analytics client displayed their live positions. The native Linux client exported and ran. On a physical CPH2505 Android phone, the debug APK installed, rendered the portrait third-person scene, and connected through ADB reverse. Dragging the floating joystick changed the server-owned position; releasing it stopped further movement. `go test ./...`, `go vet ./...`, and both Godot exports completed successfully. This is the first source version, recorded in `VERSION`.
+The native Ubuntu client and a physical CPH2505 Android phone have run together against the Linux server; its health endpoint reported both players. The Android build rendered the portrait world, the journal and the articulated explorer, and responded to drag movement. The separate analytics client has displayed live positions. `go test ./...`, `go vet ./...`, the Godot smoke scripts in `client/tests`, and both native exports have passed. Run a smoke script from the repository root with `godot --headless --path client --script res://tests/<name>.gd`.
 
-The client and server in this proof of concept are for local development. Accounts, persistence, secure remote networking, towns, mining, and quests are later work.
+This is a local development prototype. The exploration journal, mineral samples, and Wayfinder trail persist on each client device. Player accounts, server-persistent inventories and quest progress, secure remote networking, player towns, extraction machines, trading, crafting, and combat remain future work. The repository's open issues record any remaining hands-on validation for the existing world features.
