@@ -47,4 +47,8 @@ adb shell monkey -p com.mozrin.grimreach 1
 
 The ADB reverse command makes the phone's `127.0.0.1:7777` reach the Linux server. In portrait mode, touch open world space and drag in the direction you want to walk. A temporary joystick appears under your thumb; release to stop. Drag with a second finger to turn the camera. For use without ADB, enter the Linux server's reachable IP address in the client.
 
+## Proof-of-concept verification
+
+On Ubuntu 24.04, the Go server accepted Godot clients, its health endpoint reported connected players, and the separate analytics client displayed their live positions. The native Linux client exported and ran. On a physical CPH2505 Android phone, the debug APK installed, rendered the portrait third-person scene, and connected through ADB reverse. Dragging the floating joystick changed the server-owned position; releasing it stopped further movement. `go test ./...`, `go vet ./...`, and both Godot exports completed successfully. This is the first source version, recorded in `VERSION`.
+
 The client and server in this proof of concept are for local development. Accounts, persistence, secure remote networking, towns, mining, and quests are later work.
