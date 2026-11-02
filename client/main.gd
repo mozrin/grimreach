@@ -1,5 +1,6 @@
 extends Node3D
 
+const TERRAIN_SCRIPT = preload("res://world/terrain.gd")
 const PORT := 7777
 const MOVE_INTERVAL := 0.1
 const JOYSTICK_RADIUS := 78.0
@@ -17,6 +18,7 @@ var move_touch_origin := Vector2.ZERO
 var move_touch_offset := Vector2.ZERO
 
 var camera: Camera3D
+var terrain
 var joystick_visual: Node2D
 var status_label: Label
 var host_edit: LineEdit
@@ -39,6 +41,7 @@ func _process(delta: float) -> void:
 	var target := Vector3.ZERO
 	if own_id != "" and avatars.has(own_id):
 		target = avatars[own_id].position
+	terrain.update_around(target)
 	var offset := Vector3(sin(camera_yaw) * 11.0, 12.0, cos(camera_yaw) * 11.0)
 	camera.position = target + offset
 	camera.look_at(target + Vector3(0, 1.0, 0))
@@ -133,7 +136,9 @@ func _on_message(value: Dictionary) -> void:
 				if not avatars.has(id):
 					_build_avatar(id, Color(0.95, 0.68, 0.29) if id == own_id else Color(0.3, 0.7, 0.95))
 				var avatar: Node3D = avatars[id]
-				avatar.position = Vector3(float(item.get("x", 0.0)), 0.0, float(item.get("z", 0.0)))
+				var x := float(item.get("x", 0.0))
+				var z := float(item.get("z", 0.0))
+				avatar.position = Vector3(x, terrain.height_at(x, z), z)
 			for id in avatars.keys():
 				if not seen.has(id):
 					avatars[id].queue_free()
@@ -194,35 +199,8 @@ func _build_world() -> void:
 	camera.current = true
 	camera.fov = 65.0
 	add_child(camera)
-	_box("grassland", Vector3(0, -0.15, 0), Vector3(100, 0.3, 100), Color(0.33, 0.52, 0.31))
-	_box("village path", Vector3(0, 0.02, 0), Vector3(4, 0.04, 40), Color(0.55, 0.45, 0.32))
-	_box("cross path", Vector3(0, 0.02, -10), Vector3(35, 0.04, 3), Color(0.55, 0.45, 0.32))
-	for x in [-15.0, -9.0, 9.0, 15.0]:
-		for z in [-18.0, -10.0, 8.0, 17.0]:
-			_tree(Vector3(x, 0, z))
-	for x in [-11.0, 11.0]:
-		_box("cottage", Vector3(x, 1.2, -4), Vector3(4, 2.4, 4), Color(0.68, 0.54, 0.38))
-		_box("roof", Vector3(x, 2.7, -4), Vector3(4.6, 0.7, 4.6), Color(0.3, 0.29, 0.35))
-	_box("town marker", Vector3(0, 1.2, -17), Vector3(0.4, 2.4, 0.4), Color(0.8, 0.69, 0.44))
-	_box("town banner", Vector3(0.7, 2.1, -17), Vector3(1.5, 0.7, 0.08), Color(0.7, 0.19, 0.21))
-
-
-func _tree(at: Vector3) -> void:
-	_box("trunk", at + Vector3(0, 1, 0), Vector3(0.55, 2, 0.55), Color(0.38, 0.27, 0.17))
-	_box("canopy", at + Vector3(0, 2.8, 0), Vector3(2.2, 2.1, 2.2), Color(0.2, 0.4, 0.25))
-
-
-func _box(label: String, at: Vector3, size: Vector3, color: Color) -> void:
-	var mesh := MeshInstance3D.new()
-	mesh.name = label
-	var shape := BoxMesh.new()
-	shape.size = size
-	mesh.mesh = shape
-	var material := StandardMaterial3D.new()
-	material.albedo_color = color
-	mesh.material_override = material
-	mesh.position = at
-	add_child(mesh)
+	terrain = TERRAIN_SCRIPT.new()
+	add_child(terrain)
 
 
 func _build_avatar(id: String, color: Color) -> void:

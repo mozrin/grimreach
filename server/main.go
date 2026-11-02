@@ -51,6 +51,8 @@ type world struct {
 	nextID  uint64
 }
 
+const worldLimit = 8192.0
+
 func main() {
 	listen := flag.String("listen", ":7777", "game TCP listener")
 	health := flag.String("health", ":8081", "health HTTP listener")
@@ -162,8 +164,8 @@ func (w *world) run() {
 			if length > 1 {
 				dx, dz = dx/length, dz/length
 			}
-			avatar.X = math.Max(-48, math.Min(48, avatar.X+dx*0.4))
-			avatar.Z = math.Max(-48, math.Min(48, avatar.Z+dz*0.4))
+			avatar.X = math.Max(-worldLimit, math.Min(worldLimit, avatar.X+dx*0.4))
+			avatar.Z = math.Max(-worldLimit, math.Min(worldLimit, avatar.Z+dz*0.4))
 			players = append(players, *avatar)
 		}
 		for p := range w.peers {
