@@ -15,6 +15,9 @@ var leaf_material := StandardMaterial3D.new()
 var stone_material := StandardMaterial3D.new()
 var flower_material := StandardMaterial3D.new()
 var grass_material := StandardMaterial3D.new()
+var dragon_material := StandardMaterial3D.new()
+var dragons: Array[Node3D] = []
+var wing_time := 0.0
 
 
 func _ready() -> void:
@@ -31,7 +34,21 @@ func _ready() -> void:
 	stone_material.albedo_color = Color(0.48, 0.50, 0.48)
 	flower_material.albedo_color = Color(0.92, 0.54, 0.69)
 	grass_material.albedo_color = Color(0.45, 0.70, 0.35)
+	dragon_material.albedo_color = Color(0.32, 0.21, 0.48)
 	update_around(Vector3.ZERO)
+
+
+func _process(delta: float) -> void:
+	wing_time += delta
+	for index in range(dragons.size() - 1, -1, -1):
+		var dragon := dragons[index]
+		if not is_instance_valid(dragon) or dragon.is_queued_for_deletion():
+			dragons.remove_at(index)
+			continue
+		dragon.position.y = dragon.get_meta("flight_height") + sin(wing_time * 1.6) * 0.45
+		dragon.get_node("left_wing").rotation.z = sin(wing_time * 4.0) * 0.38
+		dragon.get_node("right_wing").rotation.z = -sin(wing_time * 4.0) * 0.38
+		dragon.rotation.y += delta * 0.35
 
 
 func height_at(x: float, z: float) -> float:
@@ -97,8 +114,6 @@ func _populate_chunk(root: Node3D, key: Vector2i) -> void:
 			var grid_z := key.y * 12 + cell_z
 			var x := grid_x * 4.0 + 2.0
 			var z := grid_z * 4.0 + 2.0
-			if Vector2(x, z).length() < 7.0:
-				continue
 			var place := Vector3(x, height_at(x, z), z)
 			var tree_limit := 7 + _hash(floori(float(grid_x) / 24.0), floori(float(grid_z) / 24.0), 7) % 9
 			var choice := _hash(grid_x, grid_z, 11) % 100
@@ -108,6 +123,8 @@ func _populate_chunk(root: Node3D, key: Vector2i) -> void:
 				var tuft_x := x + shift_x
 				var tuft_z := z + shift_z
 				grass.append(Transform3D(Basis().scaled(Vector3(0.35, 0.65, 0.35)), Vector3(tuft_x, height_at(tuft_x, tuft_z) + 0.32, tuft_z)))
+			if Vector2(x, z).length() < 7.0:
+				continue
 			if choice < tree_limit:
 				trunks.append(Transform3D(Basis().scaled(Vector3(0.55, 3.0, 0.55)), place + Vector3(0, 1.5, 0)))
 				leaves.append(Transform3D(Basis().scaled(Vector3(2.4, 3.4, 2.4)), place + Vector3(0, 4.1, 0)))
@@ -125,6 +142,8 @@ func _populate_chunk(root: Node3D, key: Vector2i) -> void:
 	_add_instances(root, _cone_mesh(), grass_material, grass)
 	if key == Vector2i.ZERO or (posmod(key.x, 7) == 0 and posmod(key.y, 7) == 0):
 		_add_ruin(root, key)
+	if key == Vector2i(0, -1) or (_hash(key.x, key.y, 91) % 31 == 0):
+		_add_dragon(root, key)
 
 
 func _hash(x: int, z: int, salt: int) -> int:
@@ -190,6 +209,42 @@ func _add_ruin(root: Node3D, key: Vector2i) -> void:
 		var position: Vector3 = origin + piece[0]
 		block.position = Vector3(position.x, height_at(position.x, position.z) + piece[0].y, position.z)
 		root.add_child(block)
+
+
+func _add_dragon(root: Node3D, key: Vector2i) -> void:
+	var x := key.x * CHUNK_SIZE + (2.0 if key == Vector2i(0, -1) else 14.0)
+	var z := key.y * CHUNK_SIZE + (38.0 if key == Vector2i(0, -1) else 30.0)
+	var dragon := Node3D.new()
+	dragon.name = "dragon"
+	dragon.position = Vector3(x, height_at(x, z) + 5.0, z)
+	dragon.set_meta("flight_height", dragon.position.y)
+	root.add_child(dragon)
+	_add_dragon_part(dragon, "body", Vector3(2.2, 0.8, 1.2), Vector3.ZERO)
+	_add_dragon_part(dragon, "head", Vector3(0.75, 0.75, 0.8), Vector3(1.35, 0.25, 0))
+	_add_dragon_part(dragon, "tail", Vector3(1.8, 0.3, 0.3), Vector3(-1.85, 0, 0))
+	_add_dragon_part(dragon, "neck", Vector3(0.45, 0.75, 0.5), Vector3(1.0, 0.35, 0))
+	for side in [-1, 1]:
+		_add_dragon_part(dragon, "horn", Vector3(0.2, 0.55, 0.2), Vector3(1.4, 0.75, side * 0.25))
+		_add_dragon_part(dragon, "claw", Vector3(0.25, 0.65, 0.25), Vector3(0.55, -0.55, side * 0.42))
+		_add_dragon_part(dragon, "claw", Vector3(0.25, 0.65, 0.25), Vector3(-0.65, -0.55, side * 0.42))
+	for side in [-1, 1]:
+		var wing := Node3D.new()
+		wing.name = "left_wing" if side < 0 else "right_wing"
+		wing.position = Vector3(0, 0.3, side * 0.6)
+		dragon.add_child(wing)
+		_add_dragon_part(wing, "membrane", Vector3(1.2, 0.12, 3.2), Vector3(-0.4, 0, side * 1.55))
+	dragons.append(dragon)
+
+
+func _add_dragon_part(parent: Node3D, part_name: String, dimensions: Vector3, placement: Vector3) -> void:
+	var part := MeshInstance3D.new()
+	part.name = part_name
+	var mesh := BoxMesh.new()
+	mesh.size = dimensions
+	part.mesh = mesh
+	part.material_override = dragon_material
+	part.position = placement
+	parent.add_child(part)
 
 
 func _add_vertex(surface: SurfaceTool, point: Vector3) -> void:
