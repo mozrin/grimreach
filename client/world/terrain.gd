@@ -114,8 +114,6 @@ func _populate_chunk(root: Node3D, key: Vector2i) -> void:
 			var grid_z := key.y * 12 + cell_z
 			var x := grid_x * 4.0 + 2.0
 			var z := grid_z * 4.0 + 2.0
-			if Vector2(x, z).length() < 7.0:
-				continue
 			var place := Vector3(x, height_at(x, z), z)
 			var tree_limit := 7 + _hash(floori(float(grid_x) / 24.0), floori(float(grid_z) / 24.0), 7) % 9
 			var choice := _hash(grid_x, grid_z, 11) % 100
@@ -125,6 +123,8 @@ func _populate_chunk(root: Node3D, key: Vector2i) -> void:
 				var tuft_x := x + shift_x
 				var tuft_z := z + shift_z
 				grass.append(Transform3D(Basis().scaled(Vector3(0.35, 0.65, 0.35)), Vector3(tuft_x, height_at(tuft_x, tuft_z) + 0.32, tuft_z)))
+			if Vector2(x, z).length() < 7.0:
+				continue
 			if choice < tree_limit:
 				trunks.append(Transform3D(Basis().scaled(Vector3(0.55, 3.0, 0.55)), place + Vector3(0, 1.5, 0)))
 				leaves.append(Transform3D(Basis().scaled(Vector3(2.4, 3.4, 2.4)), place + Vector3(0, 4.1, 0)))
@@ -212,11 +212,11 @@ func _add_ruin(root: Node3D, key: Vector2i) -> void:
 
 
 func _add_dragon(root: Node3D, key: Vector2i) -> void:
-	var x := key.x * CHUNK_SIZE + (6.0 if key == Vector2i(0, -1) else 14.0)
-	var z := key.y * CHUNK_SIZE + 30.0
+	var x := key.x * CHUNK_SIZE + (2.0 if key == Vector2i(0, -1) else 14.0)
+	var z := key.y * CHUNK_SIZE + (38.0 if key == Vector2i(0, -1) else 30.0)
 	var dragon := Node3D.new()
 	dragon.name = "dragon"
-	dragon.position = Vector3(x, height_at(x, z) + 7.0, z)
+	dragon.position = Vector3(x, height_at(x, z) + 5.0, z)
 	dragon.set_meta("flight_height", dragon.position.y)
 	root.add_child(dragon)
 	_add_dragon_part(dragon, "body", Vector3(2.2, 0.8, 1.2), Vector3.ZERO)
