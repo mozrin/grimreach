@@ -40,6 +40,8 @@ Nearby regions contain climate-dependent tree cover, stone outcrops, grass, and 
 
 The Linux server mirrors the solid placement rules for tree trunks, stone outcrops, and ruin walls. It rejects movement through those objects and lets the character slide along their edges. Grass, flowers, and ruin floors remain walkable.
 
+The explorer turns toward travel and swings arms and legs while walking. A purple dragon circles above the land north of spawn; more can appear across distant regions. Dragon wings flap and the creature bobs in flight. These are exploratory visual models built from original primitives; interaction and combat remain future work.
+
 ## Run on Android over ADB
 
 With the Linux server running and an Android phone connected through ADB:

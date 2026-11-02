@@ -13,6 +13,7 @@ var own_id := ""
 var avatars := {}
 var camera_yaw := 0.0
 var input_elapsed := 0.0
+var animation_elapsed := 0.0
 var move_touch_index := -1
 var move_touch_origin := Vector2.ZERO
 var move_touch_offset := Vector2.ZERO
@@ -33,7 +34,9 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
+	animation_elapsed += delta
 	_poll_connection()
+	_animate_avatars()
 	if Input.is_key_pressed(KEY_Q):
 		camera_yaw += delta * 1.8
 	if Input.is_key_pressed(KEY_E):
@@ -138,6 +141,10 @@ func _on_message(value: Dictionary) -> void:
 				var avatar: Node3D = avatars[id]
 				var x := float(item.get("x", 0.0))
 				var z := float(item.get("z", 0.0))
+				var travel := Vector2(x - avatar.position.x, z - avatar.position.z)
+				avatar.set_meta("walking", travel.length() > 0.02)
+				if travel.length() > 0.02:
+					avatar.rotation.y = atan2(travel.x, travel.y)
 				avatar.position = Vector3(x, terrain.height_at(x, z), z)
 			for id in avatars.keys():
 				if not seen.has(id):
@@ -207,17 +214,36 @@ func _build_avatar(id: String, color: Color) -> void:
 	var avatar := Node3D.new()
 	avatar.name = id
 	add_child(avatar)
-	var body := MeshInstance3D.new()
-	var capsule := CapsuleMesh.new()
-	capsule.radius = 0.38
-	capsule.height = 1.6
-	body.mesh = capsule
 	var material := StandardMaterial3D.new()
 	material.albedo_color = color
-	body.material_override = material
-	body.position.y = 0.8
-	avatar.add_child(body)
+	_add_avatar_part(avatar, "torso", Vector3(0.7, 0.9, 0.42), Vector3(0, 1.05, 0), material)
+	_add_avatar_part(avatar, "head", Vector3(0.48, 0.48, 0.48), Vector3(0, 1.75, 0), material)
+	_add_avatar_part(avatar, "left_arm", Vector3(0.22, 0.78, 0.25), Vector3(-0.48, 1.0, 0), material)
+	_add_avatar_part(avatar, "right_arm", Vector3(0.22, 0.78, 0.25), Vector3(0.48, 1.0, 0), material)
+	_add_avatar_part(avatar, "left_leg", Vector3(0.25, 0.8, 0.3), Vector3(-0.2, 0.4, 0), material)
+	_add_avatar_part(avatar, "right_leg", Vector3(0.25, 0.8, 0.3), Vector3(0.2, 0.4, 0), material)
 	avatars[id] = avatar
+
+
+func _add_avatar_part(avatar: Node3D, part_name: String, size: Vector3, placement: Vector3, material: Material) -> void:
+	var part := MeshInstance3D.new()
+	part.name = part_name
+	var mesh := BoxMesh.new()
+	mesh.size = size
+	part.mesh = mesh
+	part.material_override = material
+	part.position = placement
+	avatar.add_child(part)
+
+
+func _animate_avatars() -> void:
+	for avatar: Node3D in avatars.values():
+		var stride := sin(animation_elapsed * 11.0) * 0.55 if avatar.get_meta("walking", false) else 0.0
+		avatar.get_node("left_leg").rotation.x = stride
+		avatar.get_node("right_leg").rotation.x = -stride
+		avatar.get_node("left_arm").rotation.x = -stride
+		avatar.get_node("right_arm").rotation.x = stride
+		avatar.get_node("torso").position.y = 1.05 + abs(sin(animation_elapsed * 11.0)) * 0.06 if avatar.get_meta("walking", false) else 1.05
 
 
 func _build_interface() -> void:
