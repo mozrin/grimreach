@@ -2,6 +2,7 @@ extends Node3D
 
 const PORT := 7777
 const MOVE_INTERVAL := 0.1
+const JOYSTICK_RADIUS := 78.0
 
 var connection := StreamPeerTCP.new()
 var connected := false
@@ -9,11 +10,14 @@ var sent_hello := false
 var incoming := ""
 var own_id := ""
 var avatars := {}
-var held := {}
 var camera_yaw := 0.0
 var input_elapsed := 0.0
+var move_touch_index := -1
+var move_touch_origin := Vector2.ZERO
+var move_touch_offset := Vector2.ZERO
 
 var camera: Camera3D
+var joystick_visual: Node2D
 var status_label: Label
 var host_edit: LineEdit
 
@@ -35,7 +39,7 @@ func _process(delta: float) -> void:
 	var target := Vector3.ZERO
 	if own_id != "" and avatars.has(own_id):
 		target = avatars[own_id].position
-	var offset := Vector3(sin(camera_yaw) * 7.0, 5.0, cos(camera_yaw) * 7.0)
+	var offset := Vector3(sin(camera_yaw) * 11.0, 12.0, cos(camera_yaw) * 11.0)
 	camera.position = target + offset
 	camera.look_at(target + Vector3(0, 1.0, 0))
 	if connected:
@@ -46,11 +50,35 @@ func _process(delta: float) -> void:
 
 
 func _input(event: InputEvent) -> void:
-	if event is InputEventScreenDrag:
-		if event.position.x > get_viewport().get_visible_rect().size.x * 0.52:
-			camera_yaw -= event.relative.x * 0.006
+	if event is InputEventScreenTouch and not event.pressed and event.index == move_touch_index:
+		move_touch_index = -1
+		move_touch_offset = Vector2.ZERO
+		joystick_visual.queue_redraw()
+		if connected:
+			_send_input()
+	if event is InputEventScreenDrag and event.index != move_touch_index:
+		camera_yaw -= event.relative.x * 0.006
 	if event is InputEventMouseMotion and Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT):
 		camera_yaw -= event.relative.x * 0.006
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventScreenTouch and event.pressed and move_touch_index == -1:
+		move_touch_index = event.index
+		move_touch_origin = event.position
+		move_touch_offset = Vector2.ZERO
+		joystick_visual.queue_redraw()
+	if event is InputEventScreenDrag and event.index == move_touch_index:
+		move_touch_offset = (event.position - move_touch_origin).limit_length(JOYSTICK_RADIUS)
+		joystick_visual.queue_redraw()
+
+
+func _draw_joystick() -> void:
+	if move_touch_index == -1:
+		return
+	joystick_visual.draw_circle(move_touch_origin, JOYSTICK_RADIUS, Color(1.0, 1.0, 1.0, 0.12))
+	joystick_visual.draw_arc(move_touch_origin, JOYSTICK_RADIUS, 0.0, TAU, 48, Color(1.0, 1.0, 1.0, 0.5), 3.0, true)
+	joystick_visual.draw_circle(move_touch_origin + move_touch_offset, 29.0, Color(1.0, 1.0, 1.0, 0.72))
 
 
 func _poll_connection() -> void:
@@ -65,6 +93,9 @@ func _poll_connection() -> void:
 		connected = false
 		sent_hello = false
 		own_id = ""
+		move_touch_index = -1
+		move_touch_offset = Vector2.ZERO
+		joystick_visual.queue_redraw()
 		_update_status("Connection lost")
 	if state != StreamPeerTCP.STATUS_CONNECTED:
 		return
@@ -112,11 +143,13 @@ func _on_message(value: Dictionary) -> void:
 func _send_input() -> void:
 	var horizontal := float(Input.is_key_pressed(KEY_D)) - float(Input.is_key_pressed(KEY_A))
 	var vertical := float(Input.is_key_pressed(KEY_S)) - float(Input.is_key_pressed(KEY_W))
-	horizontal += float(held.get("right", false)) - float(held.get("left", false))
-	vertical += float(held.get("back", false)) - float(held.get("forward", false))
 	var forward := Vector2(-sin(camera_yaw), -cos(camera_yaw))
 	var right := Vector2(cos(camera_yaw), -sin(camera_yaw))
-	var direction := (right * horizontal + forward * -vertical).limit_length(1.0)
+	var direction := right * horizontal + forward * -vertical
+	if move_touch_index != -1 and move_touch_offset.length() > 12.0:
+		var stick := move_touch_offset / JOYSTICK_RADIUS
+		direction += right * stick.x + forward * -stick.y
+	direction = direction.limit_length(1.0)
 	_send({"type": "input", "dx": direction.x, "dz": direction.y})
 
 
@@ -137,10 +170,6 @@ func _connect_to_server() -> void:
 		return
 	var error := connection.connect_to_host(host, PORT)
 	_update_status("Connecting to %s…" % host if error == OK else "Connection failed: %s" % error_string(error))
-
-
-func _set_touch(action: String, pressed: bool) -> void:
-	held[action] = pressed
 
 
 func _update_status(value: String) -> void:
@@ -216,6 +245,9 @@ func _build_avatar(id: String, color: Color) -> void:
 func _build_interface() -> void:
 	var layer := CanvasLayer.new()
 	add_child(layer)
+	joystick_visual = Node2D.new()
+	joystick_visual.draw.connect(_draw_joystick)
+	layer.add_child(joystick_visual)
 	var top := HBoxContainer.new()
 	top.set_anchors_preset(Control.PRESET_TOP_WIDE)
 	top.offset_left = 20
@@ -224,7 +256,7 @@ func _build_interface() -> void:
 	top.offset_bottom = 72
 	layer.add_child(top)
 	var title := Label.new()
-	title.text = "GRIMREACH  •  WORLD PROOF OF CONCEPT"
+	title.text = "GRIMREACH"
 	title.add_theme_font_size_override("font_size", 22)
 	top.add_child(title)
 	var spacer := Control.new()
@@ -248,27 +280,10 @@ func _build_interface() -> void:
 	status_label.add_theme_font_size_override("font_size", 19)
 	layer.add_child(status_label)
 	var hint := Label.new()
-	hint.text = "WASD / arrows to move  •  Q/E or right drag to turn camera"
+	hint.text = "Drag the world to move  •  release to stop"
 	hint.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
 	hint.offset_left = 20
 	hint.offset_top = -42
 	hint.offset_right = 700
 	hint.offset_bottom = -10
 	layer.add_child(hint)
-	_touch_button(layer, "▲", "forward", Vector2(92, -192))
-	_touch_button(layer, "◀", "left", Vector2(20, -120))
-	_touch_button(layer, "▼", "back", Vector2(92, -120))
-	_touch_button(layer, "▶", "right", Vector2(164, -120))
-
-
-func _touch_button(layer: CanvasLayer, label: String, action: String, at: Vector2) -> void:
-	var button := Button.new()
-	button.text = label
-	button.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
-	button.offset_left = at.x
-	button.offset_top = at.y
-	button.offset_right = at.x + 66
-	button.offset_bottom = at.y + 66
-	button.button_down.connect(_set_touch.bind(action, true))
-	button.button_up.connect(_set_touch.bind(action, false))
-	layer.add_child(button)

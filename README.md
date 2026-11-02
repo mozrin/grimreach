@@ -22,7 +22,7 @@ In another terminal, start analytics:
 go run ./analytics
 ```
 
-Open `client/project.godot` in Godot and run the project. The client connects to `127.0.0.1:7777` automatically. Use WASD to walk and Q/E or right drag to turn the third-person camera. The server owns the avatar position; other connected players appear blue.
+Open `client/project.godot` in Godot and run the project. The client connects to `127.0.0.1:7777` automatically. Use WASD to walk and Q/E or right drag to turn the third-person camera. The client uses a portrait viewport that also works as a resizable desktop window. The server owns the avatar position; other connected players appear blue.
 
 To export and run a native Ubuntu build:
 
@@ -45,6 +45,6 @@ adb install -r build/grimreach-android.apk
 adb shell monkey -p com.mozrin.grimreach 1
 ```
 
-The ADB reverse command makes the phone's `127.0.0.1:7777` reach the Linux server. The four touch buttons move the character; dragging on the right side turns the camera. For use without ADB, enter the Linux server's reachable IP address in the client.
+The ADB reverse command makes the phone's `127.0.0.1:7777` reach the Linux server. In portrait mode, touch open world space and drag in the direction you want to walk. A temporary joystick appears under your thumb; release to stop. Drag with a second finger to turn the camera. For use without ADB, enter the Linux server's reachable IP address in the client.
 
 The client and server in this proof of concept are for local development. Accounts, persistence, secure remote networking, towns, mining, and quests are later work.
