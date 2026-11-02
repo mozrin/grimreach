@@ -26,7 +26,7 @@ func blockedPosition(x, z float64) bool {
 			if math.Hypot(centerX, centerZ) < 7 {
 				continue
 			}
-			if onRoute(centerX, centerZ) || inSiteClearing(centerX, centerZ) {
+			if onRoute(centerX, centerZ) || inSiteClearing(centerX, centerZ) || inVeinClearing(centerX, centerZ) {
 				continue
 			}
 			treeLimit := int64(7) + placementHash(floorDiv(cellX, 24), floorDiv(cellZ, 24), 7)%9
@@ -46,6 +46,9 @@ func blockedPosition(x, z float64) bool {
 	chunkZ := int64(math.Floor(z / 48))
 	for regionZ := chunkZ - 1; regionZ <= chunkZ+1; regionZ++ {
 		for regionX := chunkX - 1; regionX <= chunkX+1; regionX++ {
+			if veinX, veinZ, exists := veinCenter(regionX, regionZ); exists && math.Hypot(x-veinX, z-veinZ) < 1+playerRadius {
+				return true
+			}
 			kind := siteKind(regionX, regionZ)
 			if kind == "" {
 				continue
@@ -81,6 +84,27 @@ func blockedPosition(x, z float64) bool {
 		}
 	}
 	return false
+}
+
+func veinCenter(chunkX, chunkZ int64) (float64, float64, bool) {
+	if (chunkX != 0 || chunkZ != 0) && placementHash(chunkX, chunkZ, 71)%3 == 0 {
+		return 0, 0, false
+	}
+	if chunkX == 0 && chunkZ == 0 {
+		return 8, 4, true
+	}
+	if siteKind(chunkX, chunkZ) != "" {
+		return float64(chunkX)*48 + 37, float64(chunkZ)*48 + 10, true
+	}
+	return float64(chunkX)*48 + 12 + float64(placementHash(chunkX, chunkZ, 72)%12),
+		float64(chunkZ)*48 + 12 + float64(placementHash(chunkX, chunkZ, 73)%12), true
+}
+
+func inVeinClearing(x, z float64) bool {
+	chunkX := int64(math.Floor(x / 48))
+	chunkZ := int64(math.Floor(z / 48))
+	veinX, veinZ, exists := veinCenter(chunkX, chunkZ)
+	return exists && math.Hypot(x-veinX, z-veinZ) < 2.5
 }
 
 func siteKind(chunkX, chunkZ int64) string {

@@ -26,6 +26,16 @@ func _initialize() -> void:
 		push_error("Examining a site did not record its finding")
 		quit(1)
 		return
+	journal._close_view()
+	var vein: Dictionary = terrain.veins[Vector2i.ZERO]
+	journal.update_position(vein.position + Vector3(2, 0, 0))
+	journal._survey()
+	journal._collect_sample()
+	journal._collect_sample()
+	if not journal.samples.has(vein.id) or journal.samples[vein.id].quantity != 1:
+		push_error("Mineral sample was missing or cooldown allowed an instant duplicate")
+		quit(1)
+		return
 	journal.queue_free()
 	await process_frame
 	var restored = JOURNAL_SCRIPT.new()
@@ -33,7 +43,7 @@ func _initialize() -> void:
 	restored.save_path = save_path
 	root.add_child(restored)
 	await process_frame
-	if not restored.discovered.has(shrine.id) or not restored.examined.has(shrine.id):
+	if not restored.discovered.has(shrine.id) or not restored.examined.has(shrine.id) or not restored.samples.has(vein.id):
 		push_error("Discovery did not survive a client restart")
 		quit(1)
 		return

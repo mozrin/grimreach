@@ -59,3 +59,16 @@ func TestSitesAndRoutesStayWalkableAroundSolidStructures(t *testing.T) {
 		t.Fatal("the distant route network must continue across regions")
 	}
 }
+
+func TestMineralVeinsHaveStableSolidFootprints(t *testing.T) {
+	x, z, exists := veinCenter(0, 0)
+	if !exists || x != 8 || z != 4 {
+		t.Fatal("the opening mineral vein moved")
+	}
+	if !blockedPosition(x, z) {
+		t.Fatal("mineral vein should block walking through its crystal")
+	}
+	if !inVeinClearing(x+1, z) {
+		t.Fatal("ordinary clutter should clear around a mineral vein")
+	}
+}
