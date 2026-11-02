@@ -6,8 +6,12 @@ var terrain: Node3D
 var save_path := "user://exploration_journal.json"
 var discovered: Dictionary = {}
 var examined: Dictionary = {}
+var samples: Dictionary = {}
+var vein_last_sampled: Dictionary = {}
 var dark_mode := true
 var nearby: Dictionary = {}
+var nearby_vein: Dictionary = {}
+var active_vein: Dictionary = {}
 var last_position := Vector3.ZERO
 
 var journal_button: Button
@@ -19,6 +23,7 @@ var title_label: Label
 var content_label: Label
 var theme_button: Button
 var back_button: Button
+var collect_button: Button
 
 
 func _ready() -> void:
@@ -33,8 +38,8 @@ func _input(event: InputEvent) -> void:
 		if event.keycode == KEY_ESCAPE and overlay.visible:
 			_close_view()
 			get_viewport().set_input_as_handled()
-		elif event.keycode == KEY_F and not overlay.visible and not nearby.is_empty():
-			_examine()
+		elif event.keycode == KEY_F and not overlay.visible and (not nearby.is_empty() or not nearby_vein.is_empty()):
+			_interact()
 			get_viewport().set_input_as_handled()
 
 
@@ -55,10 +60,15 @@ func update_position(position: Vector3) -> void:
 		_save()
 		_refresh_button()
 	nearby = terrain.nearest_site(position, 5.5)
-	examine_button.visible = not nearby.is_empty() and not overlay.visible
-	nearby_label.visible = not nearby.is_empty() and not overlay.visible
-	if not nearby.is_empty():
+	nearby_vein = terrain.nearest_vein(position, 4.5)
+	examine_button.visible = (not nearby.is_empty() or not nearby_vein.is_empty()) and not overlay.visible
+	nearby_label.visible = examine_button.visible
+	if not nearby_vein.is_empty():
+		nearby_label.text = nearby_vein.name
+		examine_button.text = "Survey"
+	elif not nearby.is_empty():
 		nearby_label.text = nearby.name
+		examine_button.text = "Examine"
 
 
 func _load() -> void:
@@ -68,6 +78,8 @@ func _load() -> void:
 	if parsed is Dictionary:
 		discovered = parsed.get("discovered", {})
 		examined = parsed.get("examined", {})
+		samples = parsed.get("samples", {})
+		vein_last_sampled = parsed.get("vein_last_sampled", {})
 		dark_mode = parsed.get("dark_mode", true)
 
 
@@ -76,7 +88,7 @@ func _save() -> void:
 	if file == null:
 		push_error("Could not save exploration journal")
 		return
-	file.store_string(JSON.stringify({"discovered": discovered, "examined": examined, "dark_mode": dark_mode}))
+	file.store_string(JSON.stringify({"discovered": discovered, "examined": examined, "samples": samples, "vein_last_sampled": vein_last_sampled, "dark_mode": dark_mode}))
 	file.close()
 
 
@@ -112,7 +124,7 @@ func _build_interface() -> void:
 	examine_button.offset_bottom = -112
 	examine_button.add_theme_font_size_override("font_size", 27)
 	examine_button.visible = false
-	examine_button.pressed.connect(_examine)
+	examine_button.pressed.connect(_interact)
 	add_child(examine_button)
 
 	overlay = Control.new()
@@ -159,10 +171,19 @@ func _build_interface() -> void:
 	content_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	content_label.add_theme_font_size_override("font_size", 27)
 	scroll.add_child(content_label)
+	collect_button = Button.new()
+	collect_button.text = "Collect sample"
+	collect_button.custom_minimum_size.y = 78
+	collect_button.add_theme_font_size_override("font_size", 27)
+	collect_button.visible = false
+	collect_button.pressed.connect(_collect_sample)
+	column.add_child(collect_button)
 
 
 func _show_journal() -> void:
-	var lines := ["Follow the sandy routes. Three old places lie near the starting meadow.", "", "Places found: %d  ·  Findings: %d" % [discovered.size(), examined.size()], ""]
+	active_vein = {}
+	collect_button.visible = false
+	var lines := ["Follow the sandy routes. Three old places lie near the starting meadow.", "", "Places found: %d  ·  Findings: %d  ·  Mineral variants: %d" % [discovered.size(), examined.size(), samples.size()], ""]
 	for key in [Vector2i.ZERO, Vector2i(-1, -1), Vector2i(0, -1)]:
 		if terrain.sites.has(key):
 			var site: Dictionary = terrain.sites[key]
@@ -186,7 +207,14 @@ func _show_journal() -> void:
 		var record: Dictionary = discovered[id]
 		var state := "Examined" if examined.has(id) else "Go closer to examine"
 		lines.append("%s  (%d, %d)\n%s\n" % [record.name, int(record.x), int(record.z), state])
-	lines.append("\nTap Examine when close to a site. On Ubuntu, press F.")
+	if not samples.is_empty():
+		lines.append("\nMineral samples")
+		var vein_ids := samples.keys()
+		vein_ids.sort()
+		for id in vein_ids:
+			var sample: Dictionary = samples[id]
+			lines.append("%s  ×%d\nConductivity %d · Hardness %d · Malleability %d · Purity %d\n" % [sample.name, sample.quantity, sample.conductivity, sample.hardness, sample.malleability, sample.purity])
+	lines.append("\nTap Examine or Survey when close to a landmark. On Ubuntu, press F.")
 	_open_view("Exploration Journal", "\n".join(lines))
 
 
@@ -204,10 +232,56 @@ func _examine() -> void:
 	if nearby.is_empty():
 		return
 	var first_visit := not examined.has(nearby.id)
+	active_vein = {}
+	collect_button.visible = false
 	examined[nearby.id] = true
 	_save()
 	var finding := "New finding recorded.\n\n" if first_visit else "You have studied this place before.\n\n"
 	_open_view(nearby.name, finding + _lore(nearby.kind))
+
+
+func _interact() -> void:
+	if not nearby_vein.is_empty():
+		_survey()
+	else:
+		_examine()
+
+
+func _survey() -> void:
+	active_vein = nearby_vein
+	var quantity := 0
+	if samples.has(active_vein.id):
+		quantity = int(samples[active_vein.id].quantity)
+	_open_view(active_vein.name, "%s seam\n\nConductivity  %d / 1000\nHardness  %d / 1000\nMalleability  %d / 1000\nPurity  %d / 1000\n\nSamples held: %d" % [active_vein.kind, active_vein.conductivity, active_vein.hardness, active_vein.malleability, active_vein.purity, quantity])
+	var remaining := 60 - int(Time.get_unix_time_from_system() - float(vein_last_sampled.get(active_vein.id, 0.0)))
+	collect_button.visible = true
+	collect_button.disabled = remaining > 0
+	collect_button.text = "Ready in %ds" % remaining if remaining > 0 else "Collect sample"
+
+
+func _collect_sample() -> void:
+	if active_vein.is_empty():
+		return
+	var now := Time.get_unix_time_from_system()
+	if now - float(vein_last_sampled.get(active_vein.id, 0.0)) < 60.0:
+		return
+	var quantity := 1
+	if samples.has(active_vein.id):
+		quantity = int(samples[active_vein.id].quantity) + 1
+	samples[active_vein.id] = {
+		"name": active_vein.name,
+		"kind": active_vein.kind,
+		"conductivity": active_vein.conductivity,
+		"hardness": active_vein.hardness,
+		"malleability": active_vein.malleability,
+		"purity": active_vein.purity,
+		"quantity": quantity,
+	}
+	vein_last_sampled[active_vein.id] = now
+	_save()
+	content_label.text = "Sample collected.\n\n%s\n\nConductivity %d · Hardness %d\nMalleability %d · Purity %d\n\nSamples held: %d\n\nThese traits will shape what this material can become." % [active_vein.name, active_vein.conductivity, active_vein.hardness, active_vein.malleability, active_vein.purity, quantity]
+	collect_button.disabled = true
+	collect_button.text = "Ready in 60s"
 
 
 func _lore(kind: String) -> String:
@@ -232,8 +306,10 @@ func _open_view(title: String, content: String) -> void:
 
 func _close_view() -> void:
 	overlay.visible = false
-	examine_button.visible = not nearby.is_empty()
-	nearby_label.visible = not nearby.is_empty()
+	active_vein = {}
+	collect_button.visible = false
+	examine_button.visible = not nearby.is_empty() or not nearby_vein.is_empty()
+	nearby_label.visible = examine_button.visible
 
 
 func _toggle_theme() -> void:
@@ -248,7 +324,7 @@ func _apply_theme() -> void:
 	var button_color := Color(0.13, 0.19, 0.22) if dark_mode else Color(0.82, 0.84, 0.78)
 	title_label.add_theme_color_override("font_color", text_color)
 	content_label.add_theme_color_override("font_color", text_color)
-	for button in [back_button, theme_button]:
+	for button in [back_button, theme_button, collect_button]:
 		var style := StyleBoxFlat.new()
 		style.bg_color = button_color
 		style.set_corner_radius_all(9)

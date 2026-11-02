@@ -10,6 +10,7 @@ var ridge := FastNoiseLite.new()
 var climate := FastNoiseLite.new()
 var chunks := {}
 var sites := {}
+var veins := {}
 var center_chunk := Vector2i(2147483647, 2147483647)
 var terrain_material := StandardMaterial3D.new()
 var trunk_material := StandardMaterial3D.new()
@@ -97,6 +98,7 @@ func update_around(world_position: Vector3) -> void:
 			chunks[key].queue_free()
 			chunks.erase(key)
 			sites.erase(key)
+			veins.erase(key)
 	for z in range(center_chunk.y - VIEW_RADIUS, center_chunk.y + VIEW_RADIUS + 1):
 		for x in range(center_chunk.x - VIEW_RADIUS, center_chunk.x + VIEW_RADIUS + 1):
 			var key := Vector2i(x, z)
@@ -136,7 +138,48 @@ func _create_chunk(key: Vector2i) -> Node3D:
 	if not site.is_empty():
 		sites[key] = site
 		_add_site(root, site)
+	var vein := _vein_for_chunk(key)
+	if not vein.is_empty():
+		veins[key] = vein
+		_add_vein(root, vein)
 	return root
+
+
+func _vein_for_chunk(key: Vector2i) -> Dictionary:
+	if key != Vector2i.ZERO and _hash(key.x, key.y, 71) % 3 == 0:
+		return {}
+	var site := _site_for_chunk(key)
+	var x := key.x * CHUNK_SIZE + 12.0 + float(_hash(key.x, key.y, 72) % 12)
+	var z := key.y * CHUNK_SIZE + 12.0 + float(_hash(key.x, key.y, 73) % 12)
+	if not site.is_empty():
+		x = key.x * CHUNK_SIZE + 37.0
+		z = key.y * CHUNK_SIZE + 10.0
+	if key == Vector2i.ZERO:
+		x = 8.0
+		z = 4.0
+	var kind: String = ["Copper", "Iron", "Moonstone"][_hash(key.x, key.y, 74) % 3]
+	var prefix: String = ["Stormglass", "Ashen", "Dawnvein", "Nightfall", "Cinder", "Mossbound", "Silverwind", "Deepwater"][_hash(key.x, key.y, 75) % 8]
+	return {
+		"id": "vein:%d:%d" % [key.x, key.y],
+		"name": "%s %s · %d,%d" % [prefix, kind, key.x, key.y],
+		"kind": kind,
+		"position": Vector3(x, height_at(x, z), z),
+		"conductivity": 100 + _hash(key.x, key.y, 76) % 901,
+		"hardness": 100 + _hash(key.x, key.y, 77) % 901,
+		"malleability": 100 + _hash(key.x, key.y, 78) % 901,
+		"purity": 100 + _hash(key.x, key.y, 79) % 901,
+	}
+
+
+func nearest_vein(world_position: Vector3, radius: float) -> Dictionary:
+	var result := {}
+	var nearest := radius
+	for vein in veins.values():
+		var distance: float = Vector2(world_position.x, world_position.z).distance_to(Vector2(vein.position.x, vein.position.z))
+		if distance < nearest:
+			nearest = distance
+			result = vein
+	return result
 
 
 func _site_for_chunk(key: Vector2i) -> Dictionary:
@@ -182,6 +225,7 @@ func nearest_site(world_position: Vector3, radius: float) -> Dictionary:
 
 func _populate_chunk(root: Node3D, key: Vector2i) -> void:
 	var site := _site_for_chunk(key)
+	var vein := _vein_for_chunk(key)
 	var climate_value := climate.get_noise_2d(key.x * CHUNK_SIZE + 24.0, key.y * CHUNK_SIZE + 24.0)
 	var biome := 0 if climate_value < -0.12 else (2 if climate_value > 0.12 else 1)
 	var grass_height := 0.9 if biome == 0 else (0.4 if biome == 2 else 0.65)
@@ -207,7 +251,7 @@ func _populate_chunk(root: Node3D, key: Vector2i) -> void:
 				var tuft_x := x + shift_x
 				var tuft_z := z + shift_z
 				grass.append(Transform3D(Basis().scaled(Vector3(0.35, grass_height, 0.35)), Vector3(tuft_x, height_at(tuft_x, tuft_z) + grass_height * 0.5, tuft_z)))
-			if Vector2(x, z).length() < 7.0 or _is_route(x, z) or (not site.is_empty() and Vector2(x, z).distance_to(Vector2(site.position.x, site.position.z)) < 9.0):
+			if Vector2(x, z).length() < 7.0 or _is_route(x, z) or (not site.is_empty() and Vector2(x, z).distance_to(Vector2(site.position.x, site.position.z)) < 9.0) or (not vein.is_empty() and Vector2(x, z).distance_to(Vector2(vein.position.x, vein.position.z)) < 2.5):
 				continue
 			if choice < tree_limit:
 				trunks.append(Transform3D(Basis().scaled(Vector3(0.55, 3.0, 0.55)), place + Vector3(0, 1.5, 0)))
@@ -374,6 +418,31 @@ func _add_site_block(root: Node3D, position: Vector3, dimensions: Vector3, mater
 	block.material_override = material
 	block.position = position
 	root.add_child(block)
+
+
+func _add_vein(root: Node3D, vein: Dictionary) -> void:
+	var material := _colored_material({
+		"Copper": Color(0.20, 0.72, 0.64),
+		"Iron": Color(0.68, 0.36, 0.31),
+		"Moonstone": Color(0.49, 0.58, 0.92),
+	}[vein.kind])
+	material.emission_enabled = true
+	material.emission = material.albedo_color * 0.35
+	for fragment in [
+		[Vector3(0, 1.2, 0), 2.4, 0.9],
+		[Vector3(-0.8, 0.6, 0.5), 1.2, 0.4],
+		[Vector3(0.8, 0.7, -0.4), 1.4, 0.45],
+	]:
+		var crystal := MeshInstance3D.new()
+		var mesh := CylinderMesh.new()
+		mesh.radial_segments = 5
+		mesh.top_radius = 0.0
+		mesh.bottom_radius = fragment[2]
+		mesh.height = fragment[1]
+		crystal.mesh = mesh
+		crystal.material_override = material
+		crystal.position = vein.position + fragment[0]
+		root.add_child(crystal)
 
 
 func _add_dragon(root: Node3D, key: Vector2i) -> void:
