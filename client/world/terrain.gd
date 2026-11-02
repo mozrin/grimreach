@@ -6,6 +6,7 @@ const VIEW_RADIUS := 2
 const WORLD_SEED := 76341
 
 var elevation := FastNoiseLite.new()
+var ridge := FastNoiseLite.new()
 var climate := FastNoiseLite.new()
 var chunks := {}
 var center_chunk := Vector2i(2147483647, 2147483647)
@@ -16,6 +17,9 @@ var stone_material := StandardMaterial3D.new()
 var flower_material := StandardMaterial3D.new()
 var grass_material := StandardMaterial3D.new()
 var dragon_material := StandardMaterial3D.new()
+var biome_leaves: Array[StandardMaterial3D] = []
+var biome_grass: Array[StandardMaterial3D] = []
+var biome_flowers: Array[StandardMaterial3D] = []
 var dragons: Array[Node3D] = []
 var wing_time := 0.0
 
@@ -25,6 +29,10 @@ func _ready() -> void:
 	elevation.frequency = 0.013
 	elevation.fractal_type = FastNoiseLite.FRACTAL_FBM
 	elevation.fractal_octaves = 3
+	ridge.seed = WORLD_SEED + 601
+	ridge.frequency = 0.0035
+	ridge.fractal_type = FastNoiseLite.FRACTAL_FBM
+	ridge.fractal_octaves = 2
 	climate.seed = WORLD_SEED + 117
 	climate.frequency = 0.0025
 	terrain_material.vertex_color_use_as_albedo = true
@@ -35,7 +43,29 @@ func _ready() -> void:
 	flower_material.albedo_color = Color(0.92, 0.54, 0.69)
 	grass_material.albedo_color = Color(0.45, 0.70, 0.35)
 	dragon_material.albedo_color = Color(0.32, 0.21, 0.48)
+	biome_leaves = [
+		_colored_material(Color(0.14, 0.33, 0.31)),
+		leaf_material,
+		_colored_material(Color(0.44, 0.43, 0.22)),
+	]
+	biome_grass = [
+		_colored_material(Color(0.35, 0.65, 0.51)),
+		grass_material,
+		_colored_material(Color(0.69, 0.61, 0.32)),
+	]
+	biome_flowers = [
+		_colored_material(Color(0.71, 0.67, 0.94)),
+		flower_material,
+		_colored_material(Color(0.94, 0.64, 0.30)),
+	]
 	update_around(Vector3.ZERO)
+
+
+func _colored_material(color: Color) -> StandardMaterial3D:
+	var material := StandardMaterial3D.new()
+	material.albedo_color = color
+	material.roughness = 1.0
+	return material
 
 
 func _process(delta: float) -> void:
@@ -52,7 +82,8 @@ func _process(delta: float) -> void:
 
 
 func height_at(x: float, z: float) -> float:
-	return elevation.get_noise_2d(x, z) * 2.8
+	var ridge_value := maxf(0.0, ridge.get_noise_2d(x, z) + 0.18)
+	return elevation.get_noise_2d(x, z) * 3.2 + ridge_value * ridge_value * 28.0
 
 
 func update_around(world_position: Vector3) -> void:
@@ -103,6 +134,9 @@ func _create_chunk(key: Vector2i) -> Node3D:
 
 
 func _populate_chunk(root: Node3D, key: Vector2i) -> void:
+	var climate_value := climate.get_noise_2d(key.x * CHUNK_SIZE + 24.0, key.y * CHUNK_SIZE + 24.0)
+	var biome := 0 if climate_value < -0.12 else (2 if climate_value > 0.12 else 1)
+	var grass_height := 0.9 if biome == 0 else (0.4 if biome == 2 else 0.65)
 	var trunks: Array[Transform3D] = []
 	var leaves: Array[Transform3D] = []
 	var stones: Array[Transform3D] = []
@@ -122,7 +156,7 @@ func _populate_chunk(root: Node3D, key: Vector2i) -> void:
 				var shift_z := float(_hash(grid_x, grid_z, 80 + tuft) % 300) / 100.0 - 1.5
 				var tuft_x := x + shift_x
 				var tuft_z := z + shift_z
-				grass.append(Transform3D(Basis().scaled(Vector3(0.35, 0.65, 0.35)), Vector3(tuft_x, height_at(tuft_x, tuft_z) + 0.32, tuft_z)))
+				grass.append(Transform3D(Basis().scaled(Vector3(0.35, grass_height, 0.35)), Vector3(tuft_x, height_at(tuft_x, tuft_z) + grass_height * 0.5, tuft_z)))
 			if Vector2(x, z).length() < 7.0:
 				continue
 			if choice < tree_limit:
@@ -136,10 +170,10 @@ func _populate_chunk(root: Node3D, key: Vector2i) -> void:
 						var offset := Vector3(petal * 0.9 - 0.45, 0, float(_hash(grid_x, grid_z, petal + 44) % 100) / 100.0)
 						flowers.append(Transform3D(Basis().scaled(Vector3(0.4, 0.6, 0.4)), place + offset + Vector3(0, 0.3, 0)))
 	_add_instances(root, _box_mesh(), trunk_material, trunks)
-	_add_instances(root, _cone_mesh(), leaf_material, leaves)
+	_add_instances(root, _cone_mesh(), biome_leaves[biome], leaves)
 	_add_instances(root, _rock_mesh(), stone_material, stones)
-	_add_instances(root, _flower_mesh(), flower_material, flowers)
-	_add_instances(root, _cone_mesh(), grass_material, grass)
+	_add_instances(root, _flower_mesh(), biome_flowers[biome], flowers)
+	_add_instances(root, _cone_mesh(), biome_grass[biome], grass)
 	if key == Vector2i.ZERO or (posmod(key.x, 7) == 0 and posmod(key.y, 7) == 0):
 		_add_ruin(root, key)
 	if key == Vector2i(0, -1) or (_hash(key.x, key.y, 91) % 31 == 0):
@@ -254,5 +288,6 @@ func _add_vertex(surface: SurfaceTool, point: Vector3) -> void:
 	var dry := Color(0.61, 0.49, 0.31)
 	var color := wet.lerp(meadow, clampf((climate_value + 0.5) * 2.0, 0.0, 1.0))
 	color = color.lerp(dry, clampf(climate_value * 2.0, 0.0, 1.0))
+	color = color.lerp(Color(0.52, 0.53, 0.48), clampf((point.y - 5.0) / 12.0, 0.0, 0.7))
 	surface.set_color(color)
 	surface.add_vertex(point)
