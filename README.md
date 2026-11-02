@@ -36,6 +36,8 @@ The server exposes `http://127.0.0.1:8081/health` for a basic health and player-
 
 The world covers coordinates from -8192 to +8192 on each horizontal axis. The client streams a 5-by-5 set of 48-unit terrain regions around the player and regenerates them deterministically from seed `76341`. The server continues to own player movement. Run the region smoke check with `godot --headless --path client --script res://tests/terrain_smoke.gd`.
 
+Nearby regions contain climate-dependent tree cover, stone outcrops, grass, and flower patches. An ancient stone courtyard stands northeast of spawn, with further ruins every seven regions in each direction. Decoration placement is deterministic and unloads with its region.
+
 ## Run on Android over ADB
 
 With the Linux server running and an Android phone connected through ADB:
