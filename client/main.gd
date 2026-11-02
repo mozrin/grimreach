@@ -1,6 +1,7 @@
 extends Node3D
 
 const TERRAIN_SCRIPT = preload("res://world/terrain.gd")
+const JOURNAL_SCRIPT = preload("res://exploration/journal.gd")
 const PORT := 7777
 const MOVE_INTERVAL := 0.1
 const JOYSTICK_RADIUS := 78.0
@@ -20,6 +21,7 @@ var move_touch_offset := Vector2.ZERO
 
 var camera: Camera3D
 var terrain
+var journal
 var joystick_visual: Node2D
 var status_label: Label
 var host_edit: LineEdit
@@ -28,6 +30,10 @@ var host_edit: LineEdit
 func _ready() -> void:
 	_build_world()
 	_build_interface()
+	journal = JOURNAL_SCRIPT.new()
+	journal.terrain = terrain
+	journal.opened.connect(_stop_touch_movement)
+	add_child(journal)
 	_build_avatar("preview", Color(0.95, 0.68, 0.29))
 	_update_status("Disconnected — enter a server address")
 	_connect_to_server()
@@ -45,6 +51,7 @@ func _process(delta: float) -> void:
 	if own_id != "" and avatars.has(own_id):
 		target = avatars[own_id].position
 	terrain.update_around(target)
+	journal.update_position(target)
 	var offset := Vector3(sin(camera_yaw) * 11.0, 12.0, cos(camera_yaw) * 11.0)
 	camera.position = target + offset
 	camera.look_at(target + Vector3(0, 1.0, 0))
@@ -69,6 +76,8 @@ func _input(event: InputEvent) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if journal.is_open():
+		return
 	if event is InputEventScreenTouch and event.pressed and move_touch_index == -1:
 		move_touch_index = event.index
 		move_touch_origin = event.position
@@ -153,6 +162,9 @@ func _on_message(value: Dictionary) -> void:
 
 
 func _send_input() -> void:
+	if journal.is_open():
+		_send({"type": "input", "dx": 0.0, "dz": 0.0})
+		return
 	var horizontal := float(Input.is_key_pressed(KEY_D)) - float(Input.is_key_pressed(KEY_A))
 	var vertical := float(Input.is_key_pressed(KEY_S)) - float(Input.is_key_pressed(KEY_W))
 	var forward := Vector2(-sin(camera_yaw), -cos(camera_yaw))
@@ -163,6 +175,14 @@ func _send_input() -> void:
 		direction += right * stick.x + forward * -stick.y
 	direction = direction.limit_length(1.0)
 	_send({"type": "input", "dx": direction.x, "dz": direction.y})
+
+
+func _stop_touch_movement() -> void:
+	move_touch_index = -1
+	move_touch_offset = Vector2.ZERO
+	joystick_visual.queue_redraw()
+	if connected:
+		_send_input()
 
 
 func _send(value: Dictionary) -> void:
