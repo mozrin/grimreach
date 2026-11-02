@@ -380,6 +380,29 @@ func _add_camp(root: Node3D, site: Dictionary) -> void:
 	_add_site_block(root, origin + Vector3(0, 0.9, 0), Vector3(0.7, 1.1, 0.7), ember)
 	_add_site_block(root, origin + Vector3(0, 1.8, 4), Vector3(0.18, 3.6, 0.18), trunk_material)
 	_add_site_block(root, origin + Vector3(0.9, 3.1, 4), Vector3(1.8, 0.9, 0.08), canvas)
+	if site.id == "camp:-1:-1":
+		var guide_x: float = origin.x - 2.2
+		var guide_z: float = origin.z + 3.0
+		var guide_base := Vector3(guide_x, height_at(guide_x, guide_z), guide_z)
+		var cloak := _colored_material(Color(0.24, 0.38, 0.47))
+		var skin := _colored_material(Color(0.72, 0.53, 0.38))
+		_add_site_block(root, guide_base + Vector3(0, 1.05, 0), Vector3(0.85, 1.5, 0.55), cloak)
+		var head := MeshInstance3D.new()
+		var head_mesh := SphereMesh.new()
+		head_mesh.radius = 0.38
+		head_mesh.height = 0.76
+		head.mesh = head_mesh
+		head.material_override = skin
+		head.position = guide_base + Vector3(0, 2.05, 0)
+		root.add_child(head)
+		_add_site_block(root, guide_base + Vector3(0, 2.48, 0), Vector3(1.2, 0.18, 1.0), cloak)
+		var nameplate := Label3D.new()
+		nameplate.text = "Edda · Wayfinder"
+		nameplate.font_size = 48
+		nameplate.pixel_size = 0.006
+		nameplate.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		nameplate.position = guide_base + Vector3(0, 3.4, 0)
+		root.add_child(nameplate)
 
 
 func _add_shrine(root: Node3D, site: Dictionary) -> void:

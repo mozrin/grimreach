@@ -9,6 +9,8 @@ var examined: Dictionary = {}
 var samples: Dictionary = {}
 var vein_last_sampled: Dictionary = {}
 var dark_mode := true
+var quest_started := false
+var quest_completed := false
 var nearby: Dictionary = {}
 var nearby_vein: Dictionary = {}
 var active_vein: Dictionary = {}
@@ -24,6 +26,7 @@ var content_label: Label
 var theme_button: Button
 var back_button: Button
 var collect_button: Button
+var quest_button: Button
 
 
 func _ready() -> void:
@@ -81,6 +84,8 @@ func _load() -> void:
 		samples = parsed.get("samples", {})
 		vein_last_sampled = parsed.get("vein_last_sampled", {})
 		dark_mode = parsed.get("dark_mode", true)
+		quest_started = parsed.get("quest_started", false)
+		quest_completed = parsed.get("quest_completed", false)
 
 
 func _save() -> void:
@@ -88,7 +93,7 @@ func _save() -> void:
 	if file == null:
 		push_error("Could not save exploration journal")
 		return
-	file.store_string(JSON.stringify({"discovered": discovered, "examined": examined, "samples": samples, "vein_last_sampled": vein_last_sampled, "dark_mode": dark_mode}))
+	file.store_string(JSON.stringify({"discovered": discovered, "examined": examined, "samples": samples, "vein_last_sampled": vein_last_sampled, "dark_mode": dark_mode, "quest_started": quest_started, "quest_completed": quest_completed}))
 	file.close()
 
 
@@ -178,12 +183,21 @@ func _build_interface() -> void:
 	collect_button.visible = false
 	collect_button.pressed.connect(_collect_sample)
 	column.add_child(collect_button)
+	quest_button = Button.new()
+	quest_button.custom_minimum_size.y = 78
+	quest_button.add_theme_font_size_override("font_size", 27)
+	quest_button.visible = false
+	quest_button.pressed.connect(_advance_quest)
+	column.add_child(quest_button)
 
 
 func _show_journal() -> void:
 	active_vein = {}
 	collect_button.visible = false
+	quest_button.visible = false
 	var lines := ["Follow the sandy routes. Three old places lie near the starting meadow.", "", "Places found: %d  ·  Findings: %d  ·  Mineral variants: %d" % [discovered.size(), examined.size(), samples.size()], ""]
+	lines.append(_quest_text())
+	lines.append("")
 	for key in [Vector2i.ZERO, Vector2i(-1, -1), Vector2i(0, -1)]:
 		if terrain.sites.has(key):
 			var site: Dictionary = terrain.sites[key]
@@ -234,10 +248,17 @@ func _examine() -> void:
 	var first_visit := not examined.has(nearby.id)
 	active_vein = {}
 	collect_button.visible = false
+	quest_button.visible = false
 	examined[nearby.id] = true
 	_save()
 	var finding := "New finding recorded.\n\n" if first_visit else "You have studied this place before.\n\n"
-	_open_view(nearby.name, finding + _lore(nearby.kind))
+	var content := finding + _lore(nearby.kind)
+	if nearby.id == "camp:-1:-1":
+		content += "\n\nEdda the Wayfinder waits beside the fire.\n\n" + _quest_text()
+		quest_button.visible = not quest_completed
+		quest_button.text = "Begin Wayfinder's Trail" if not quest_started else "Claim Wayfinder's Mark"
+		quest_button.disabled = quest_started and not _quest_ready()
+	_open_view(nearby.name, content)
 
 
 func _interact() -> void:
@@ -249,6 +270,7 @@ func _interact() -> void:
 
 func _survey() -> void:
 	active_vein = nearby_vein
+	quest_button.visible = false
 	var quantity := 0
 	if samples.has(active_vein.id):
 		quantity = int(samples[active_vein.id].quantity)
@@ -284,6 +306,39 @@ func _collect_sample() -> void:
 	collect_button.text = "Ready in 60s"
 
 
+func _quest_ready() -> bool:
+	return examined.has("shrine:0:-1") and examined.has("ruin:0:0") and not samples.is_empty()
+
+
+func _quest_text() -> String:
+	if quest_completed:
+		return "Wayfinder's Trail complete · Wayfinder's Mark earned.\nEdda's next lead: follow the north road beyond the Old Star Shrine."
+	var lines := ["Wayfinder's Trail"]
+	if not quest_started:
+		lines.append("Find Edda at Wayfarer Camp, southwest of the meadow, to begin.")
+	else:
+		lines.append("%s Examine the Old Star Shrine" % ["✓" if examined.has("shrine:0:-1") else "○"])
+		lines.append("%s Examine the Fallen Court" % ["✓" if examined.has("ruin:0:0") else "○"])
+		lines.append("%s Collect a mineral sample" % ["✓" if not samples.is_empty() else "○"])
+		lines.append("Return to Edda at Wayfarer Camp." if _quest_ready() else "Follow the sandy paths between the sites.")
+	return "\n".join(lines)
+
+
+func _advance_quest() -> void:
+	if nearby.get("id", "") != "camp:-1:-1" or quest_completed:
+		return
+	if not quest_started:
+		quest_started = true
+		quest_button.text = "Claim Wayfinder's Mark"
+		quest_button.disabled = not _quest_ready()
+		content_label.text = "Edda points to the shrine and the fallen court. Study both places, collect a mineral sample, then come back.\n\n" + _quest_text()
+	elif _quest_ready():
+		quest_completed = true
+		quest_button.visible = false
+		content_label.text = "Edda traces a winding road on her map and hands you the Wayfinder's Mark.\n\n" + _quest_text()
+	_save()
+
+
 func _lore(kind: String) -> String:
 	match kind:
 		"ruin":
@@ -308,6 +363,7 @@ func _close_view() -> void:
 	overlay.visible = false
 	active_vein = {}
 	collect_button.visible = false
+	quest_button.visible = false
 	examine_button.visible = not nearby.is_empty() or not nearby_vein.is_empty()
 	nearby_label.visible = examine_button.visible
 
@@ -324,7 +380,7 @@ func _apply_theme() -> void:
 	var button_color := Color(0.13, 0.19, 0.22) if dark_mode else Color(0.82, 0.84, 0.78)
 	title_label.add_theme_color_override("font_color", text_color)
 	content_label.add_theme_color_override("font_color", text_color)
-	for button in [back_button, theme_button, collect_button]:
+	for button in [back_button, theme_button, collect_button, quest_button]:
 		var style := StyleBoxFlat.new()
 		style.bg_color = button_color
 		style.set_corner_radius_all(9)

@@ -49,6 +49,9 @@ func TestSitesAndRoutesStayWalkableAroundSolidStructures(t *testing.T) {
 	if !blockedPosition(-28, -25) {
 		t.Fatal("camp tent must block movement")
 	}
+	if !blockedPosition(-26.2, -21) {
+		t.Fatal("Edda must block movement")
+	}
 	if !blockedPosition(24, -24) {
 		t.Fatal("shrine obelisk must block movement")
 	}
