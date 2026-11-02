@@ -9,6 +9,7 @@ var elevation := FastNoiseLite.new()
 var ridge := FastNoiseLite.new()
 var climate := FastNoiseLite.new()
 var chunks := {}
+var sites := {}
 var center_chunk := Vector2i(2147483647, 2147483647)
 var terrain_material := StandardMaterial3D.new()
 var trunk_material := StandardMaterial3D.new()
@@ -95,6 +96,7 @@ func update_around(world_position: Vector3) -> void:
 		if abs(key.x - center_chunk.x) > VIEW_RADIUS or abs(key.y - center_chunk.y) > VIEW_RADIUS:
 			chunks[key].queue_free()
 			chunks.erase(key)
+			sites.erase(key)
 	for z in range(center_chunk.y - VIEW_RADIUS, center_chunk.y + VIEW_RADIUS + 1):
 		for x in range(center_chunk.x - VIEW_RADIUS, center_chunk.x + VIEW_RADIUS + 1):
 			var key := Vector2i(x, z)
@@ -130,10 +132,45 @@ func _create_chunk(key: Vector2i) -> Node3D:
 	instance.material_override = terrain_material
 	root.add_child(instance)
 	_populate_chunk(root, key)
+	var site := _site_for_chunk(key)
+	if not site.is_empty():
+		sites[key] = site
+		_add_site(root, site)
 	return root
 
 
+func _site_for_chunk(key: Vector2i) -> Dictionary:
+	var kind := ""
+	if key == Vector2i.ZERO or (posmod(key.x, 7) == 0 and posmod(key.y, 7) == 0):
+		kind = "ruin"
+	elif key == Vector2i(-1, -1):
+		kind = "camp"
+	elif key == Vector2i(0, -1):
+		kind = "shrine"
+	elif _hash(key.x, key.y, 47) % 3 == 0:
+		kind = ["ruin", "camp", "shrine"][_hash(key.x, key.y, 53) % 3]
+	if kind == "":
+		return {}
+	var offset := 19.0 if kind == "ruin" else 24.0
+	var position := Vector3(key.x * CHUNK_SIZE + offset, 0, key.y * CHUNK_SIZE + offset)
+	position.y = height_at(position.x, position.z)
+	var title: String = {"ruin": "Fallen Court", "camp": "Wayfarer Camp", "shrine": "Old Star Shrine"}[kind]
+	return {"id": "%s:%d:%d" % [kind, key.x, key.y], "kind": kind, "name": title, "position": position}
+
+
+func nearest_site(world_position: Vector3, radius: float) -> Dictionary:
+	var result := {}
+	var nearest := radius
+	for site in sites.values():
+		var distance: float = Vector2(world_position.x, world_position.z).distance_to(Vector2(site.position.x, site.position.z))
+		if distance < nearest:
+			nearest = distance
+			result = site
+	return result
+
+
 func _populate_chunk(root: Node3D, key: Vector2i) -> void:
+	var site := _site_for_chunk(key)
 	var climate_value := climate.get_noise_2d(key.x * CHUNK_SIZE + 24.0, key.y * CHUNK_SIZE + 24.0)
 	var biome := 0 if climate_value < -0.12 else (2 if climate_value > 0.12 else 1)
 	var grass_height := 0.9 if biome == 0 else (0.4 if biome == 2 else 0.65)
@@ -152,12 +189,14 @@ func _populate_chunk(root: Node3D, key: Vector2i) -> void:
 			var tree_limit := 7 + _hash(floori(float(grid_x) / 24.0), floori(float(grid_z) / 24.0), 7) % 9
 			var choice := _hash(grid_x, grid_z, 11) % 100
 			for tuft in range(3):
+				if _is_route(x, z):
+					continue
 				var shift_x := float(_hash(grid_x, grid_z, 70 + tuft) % 300) / 100.0 - 1.5
 				var shift_z := float(_hash(grid_x, grid_z, 80 + tuft) % 300) / 100.0 - 1.5
 				var tuft_x := x + shift_x
 				var tuft_z := z + shift_z
 				grass.append(Transform3D(Basis().scaled(Vector3(0.35, grass_height, 0.35)), Vector3(tuft_x, height_at(tuft_x, tuft_z) + grass_height * 0.5, tuft_z)))
-			if Vector2(x, z).length() < 7.0:
+			if Vector2(x, z).length() < 7.0 or _is_route(x, z) or (not site.is_empty() and Vector2(x, z).distance_to(Vector2(site.position.x, site.position.z)) < 9.0):
 				continue
 			if choice < tree_limit:
 				trunks.append(Transform3D(Basis().scaled(Vector3(0.55, 3.0, 0.55)), place + Vector3(0, 1.5, 0)))
@@ -174,10 +213,19 @@ func _populate_chunk(root: Node3D, key: Vector2i) -> void:
 	_add_instances(root, _rock_mesh(), stone_material, stones)
 	_add_instances(root, _flower_mesh(), biome_flowers[biome], flowers)
 	_add_instances(root, _cone_mesh(), biome_grass[biome], grass)
-	if key == Vector2i.ZERO or (posmod(key.x, 7) == 0 and posmod(key.y, 7) == 0):
-		_add_ruin(root, key)
 	if key == Vector2i(0, -1) or (_hash(key.x, key.y, 91) % 31 == 0):
 		_add_dragon(root, key)
+
+
+func _is_route(x: float, z: float) -> bool:
+	if absf(fposmod(x - 24.0 + 72.0, 144.0) - 72.0) < 3.5 or absf(fposmod(z - 24.0 + 72.0, 144.0) - 72.0) < 3.5:
+		return true
+	var point := Vector2(x, z)
+	for destination in [Vector2(19, 19), Vector2(-24, -24), Vector2(24, -24)]:
+		var closest := Geometry2D.get_closest_point_to_segment(point, Vector2.ZERO, destination)
+		if point.distance_to(closest) < 3.0:
+			return true
+	return false
 
 
 func _hash(x: int, z: int, salt: int) -> int:
@@ -225,24 +273,96 @@ func _flower_mesh() -> SphereMesh:
 	return mesh
 
 
-func _add_ruin(root: Node3D, key: Vector2i) -> void:
-	var origin := Vector3(key.x * CHUNK_SIZE + 19.0, 0, key.y * CHUNK_SIZE + 19.0)
+func _add_site(root: Node3D, site: Dictionary) -> void:
+	match site.kind:
+		"ruin":
+			_add_ruin(root, site)
+		"camp":
+			_add_camp(root, site)
+		"shrine":
+			_add_shrine(root, site)
+	var marker := Label3D.new()
+	marker.text = site.name
+	marker.font_size = 64
+	marker.pixel_size = 0.006
+	marker.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	marker.position = site.position + Vector3(0, 8.0, 0)
+	root.add_child(marker)
+
+
+func _add_ruin(root: Node3D, site: Dictionary) -> void:
+	var origin: Vector3 = site.position
 	for piece in [
 		[Vector3(-5, 1.6, -5), Vector3(1, 3.2, 1)],
 		[Vector3(5, 1.6, -5), Vector3(1, 3.2, 1)],
 		[Vector3(0, 3.3, -5), Vector3(11, 1, 1)],
 		[Vector3(-5, 1.0, 5), Vector3(1, 2, 1)],
 		[Vector3(5, 1.0, 5), Vector3(1, 2, 1)],
-		[Vector3(0, 0.2, 0), Vector3(12, 0.4, 12)],
+		[Vector3(0, -0.12, 0), Vector3(12, 0.25, 12)],
 	]:
-		var block := MeshInstance3D.new()
-		var mesh := BoxMesh.new()
-		mesh.size = piece[1]
-		block.mesh = mesh
-		block.material_override = stone_material
 		var position: Vector3 = origin + piece[0]
-		block.position = Vector3(position.x, height_at(position.x, position.z) + piece[0].y, position.z)
-		root.add_child(block)
+		_add_site_block(root, Vector3(position.x, height_at(position.x, position.z) + piece[0].y, position.z), piece[1], stone_material)
+
+
+func _add_camp(root: Node3D, site: Dictionary) -> void:
+	var origin: Vector3 = site.position
+	var canvas := _colored_material(Color(0.62, 0.34, 0.22))
+	var ember := _colored_material(Color(1.0, 0.53, 0.18))
+	for offset in [Vector3(-4, 0, -1), Vector3(4, 0, -1)]:
+		var tent := MeshInstance3D.new()
+		var shape := CylinderMesh.new()
+		shape.top_radius = 0.0
+		shape.bottom_radius = 2.0
+		shape.height = 3.0
+		shape.radial_segments = 4
+		tent.mesh = shape
+		tent.material_override = canvas
+		var x: float = origin.x + offset.x
+		var z: float = origin.z + offset.z
+		tent.position = Vector3(x, height_at(x, z) + 1.5, z)
+		root.add_child(tent)
+	_add_site_block(root, origin + Vector3(0, 0.25, 0), Vector3(1.4, 0.5, 1.4), stone_material)
+	_add_site_block(root, origin + Vector3(0, 0.9, 0), Vector3(0.7, 1.1, 0.7), ember)
+	_add_site_block(root, origin + Vector3(0, 1.8, 4), Vector3(0.18, 3.6, 0.18), trunk_material)
+	_add_site_block(root, origin + Vector3(0.9, 3.1, 4), Vector3(1.8, 0.9, 0.08), canvas)
+
+
+func _add_shrine(root: Node3D, site: Dictionary) -> void:
+	var origin: Vector3 = site.position
+	var glow := _colored_material(Color(0.45, 0.81, 0.91))
+	glow.emission_enabled = true
+	glow.emission = Color(0.25, 0.60, 0.84)
+	_add_site_block(root, origin + Vector3(0, -0.12, 0), Vector3(10, 0.25, 10), stone_material)
+	var spire := MeshInstance3D.new()
+	var shape := CylinderMesh.new()
+	shape.radial_segments = 4
+	shape.bottom_radius = 1.0
+	shape.top_radius = 0.2
+	shape.height = 5.0
+	spire.mesh = shape
+	spire.material_override = stone_material
+	spire.position = origin + Vector3(0, 2.7, 0)
+	root.add_child(spire)
+	for offset in [Vector3(-4, 1.2, -4), Vector3(4, 1.2, -4), Vector3(-4, 1.2, 4), Vector3(4, 1.2, 4)]:
+		_add_site_block(root, origin + offset, Vector3(0.8, 2.4, 0.8), stone_material)
+	var beacon := MeshInstance3D.new()
+	var orb := SphereMesh.new()
+	orb.radius = 0.7
+	orb.height = 1.4
+	beacon.mesh = orb
+	beacon.material_override = glow
+	beacon.position = origin + Vector3(0, 5.8, 0)
+	root.add_child(beacon)
+
+
+func _add_site_block(root: Node3D, position: Vector3, dimensions: Vector3, material: Material) -> void:
+	var block := MeshInstance3D.new()
+	var mesh := BoxMesh.new()
+	mesh.size = dimensions
+	block.mesh = mesh
+	block.material_override = material
+	block.position = position
+	root.add_child(block)
 
 
 func _add_dragon(root: Node3D, key: Vector2i) -> void:
@@ -289,5 +409,7 @@ func _add_vertex(surface: SurfaceTool, point: Vector3) -> void:
 	var color := wet.lerp(meadow, clampf((climate_value + 0.5) * 2.0, 0.0, 1.0))
 	color = color.lerp(dry, clampf(climate_value * 2.0, 0.0, 1.0))
 	color = color.lerp(Color(0.52, 0.53, 0.48), clampf((point.y - 5.0) / 12.0, 0.0, 0.7))
+	if _is_route(point.x, point.z):
+		color = color.lerp(Color(0.68, 0.55, 0.37), 0.8)
 	surface.set_color(color)
 	surface.add_vertex(point)

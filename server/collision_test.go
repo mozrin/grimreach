@@ -41,3 +41,21 @@ func TestFloorDivMatchesNegativeWorldCells(t *testing.T) {
 		t.Fatal("negative biome cells must round toward minus infinity")
 	}
 }
+
+func TestSitesAndRoutesStayWalkableAroundSolidStructures(t *testing.T) {
+	if siteKind(0, 0) != "ruin" || siteKind(-1, -1) != "camp" || siteKind(0, -1) != "shrine" {
+		t.Fatal("starting destinations must have stable distinct types")
+	}
+	if !blockedPosition(-28, -25) {
+		t.Fatal("camp tent must block movement")
+	}
+	if !blockedPosition(24, -24) {
+		t.Fatal("shrine obelisk must block movement")
+	}
+	if blockedPosition(0, -10) {
+		t.Fatal("starting route should remain walkable")
+	}
+	if !onRoute(168, 24) || !onRoute(24, -120) {
+		t.Fatal("the distant route network must continue across regions")
+	}
+}
