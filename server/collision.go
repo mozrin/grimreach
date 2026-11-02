@@ -66,7 +66,11 @@ func blockedPosition(x, z float64) bool {
 					}
 				}
 			case "camp":
-				for _, obstacle := range [][3]float64{{-4, -1, 2}, {4, -1, 2}, {0, 0, 0.7}} {
+				obstacles := [][3]float64{{-4, -1, 2}, {4, -1, 2}, {0, 0, 0.7}}
+				if regionX == -1 && regionZ == -1 {
+					obstacles = append(obstacles, [3]float64{-2.2, 3, 0.45})
+				}
+				for _, obstacle := range obstacles {
 					if math.Hypot(x-(originX+obstacle[0]), z-(originZ+obstacle[1])) < obstacle[2]+playerRadius {
 						return true
 					}

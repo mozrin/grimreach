@@ -27,6 +27,19 @@ func _initialize() -> void:
 		quit(1)
 		return
 	journal._close_view()
+	var camp: Dictionary = terrain.sites[Vector2i(-1, -1)]
+	journal.update_position(camp.position + Vector3(2, 0, 3))
+	journal._examine()
+	journal._advance_quest()
+	if not journal.quest_started or journal.quest_completed:
+		push_error("Wayfinder trail did not begin at camp")
+		quit(1)
+		return
+	journal._close_view()
+	var court: Dictionary = terrain.sites[Vector2i.ZERO]
+	journal.update_position(court.position)
+	journal._examine()
+	journal._close_view()
 	var vein: Dictionary = terrain.veins[Vector2i.ZERO]
 	journal.update_position(vein.position + Vector3(2, 0, 0))
 	journal._survey()
@@ -36,6 +49,19 @@ func _initialize() -> void:
 		push_error("Mineral sample was missing or cooldown allowed an instant duplicate")
 		quit(1)
 		return
+	journal._close_view()
+	journal.update_position(camp.position + Vector3(2, 0, 3))
+	journal._examine()
+	if not journal._quest_ready():
+		push_error("Completed trail objectives were not recognized")
+		quit(1)
+		return
+	journal._advance_quest()
+	journal._advance_quest()
+	if not journal.quest_completed:
+		push_error("Wayfinder mark was not awarded")
+		quit(1)
+		return
 	journal.queue_free()
 	await process_frame
 	var restored = JOURNAL_SCRIPT.new()
@@ -43,14 +69,14 @@ func _initialize() -> void:
 	restored.save_path = save_path
 	root.add_child(restored)
 	await process_frame
-	if not restored.discovered.has(shrine.id) or not restored.examined.has(shrine.id) or not restored.samples.has(vein.id):
+	if not restored.discovered.has(shrine.id) or not restored.examined.has(shrine.id) or not restored.samples.has(vein.id) or not restored.quest_completed:
 		push_error("Discovery did not survive a client restart")
 		quit(1)
 		return
 	terrain.update_around(Vector3(1000, 0, 1000))
 	terrain.update_around(Vector3.ZERO)
 	restored.update_position(terrain.sites[Vector2i(0, -1)].position)
-	if restored.discovered.size() != 1:
+	if restored.discovered.size() != 3:
 		push_error("Returning to a streamed site duplicated its discovery")
 		quit(1)
 		return
