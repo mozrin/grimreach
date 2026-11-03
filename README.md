@@ -5,7 +5,7 @@ collaboration. See [Contributing](CONTRIBUTING.md) to propose work and coordinat
 with the owner, the [Wiki](https://github.com/mozrin/grimreach/wiki) for play and
 development guides, and [License](LICENSE) for reuse terms.
 
-Grimreach is an original fantasy-world prototype. A native third-person 3D client runs on Ubuntu and Android against an authoritative Linux world server, with a separate live analytics client. The current version is recorded in `VERSION`. This codebase uses no code or assets from the older Grimreach repositories or Star Wars Galaxies projects.
+Grimreach is an original fantasy-world prototype. A native third-person 3D client runs on Ubuntu and Android against an authoritative Linux world server, with a separate live analytics client. The current version is recorded in `VERSION`.
 
 ## Requirements
 
