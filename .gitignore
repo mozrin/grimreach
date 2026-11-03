@@ -1,2 +1,3 @@
 client/.godot/
 build/
+.env

@@ -22,7 +22,7 @@ In another terminal, start analytics:
 go run ./analytics
 ```
 
-Open `client/project.godot` in Godot and run the project. The client connects to `127.0.0.1:7777` automatically. Use WASD to walk and Q/E or right drag to turn the third-person camera. The client uses a portrait viewport that also works as a resizable desktop window. The server owns the avatar position; other connected players appear blue.
+Open `client/project.godot` in Godot and run the project. The client connects to `wss://grimreach.mozrin.com/play` by default. For a local server, launch Godot with `GRIMREACH_SERVER_URL=ws://127.0.0.1:8081/play`. Use WASD to walk and Q/E or right drag to turn the third-person camera. The client uses a portrait viewport that also works as a resizable desktop window. The server owns the avatar position; other connected players appear blue.
 
 To export and run a native Ubuntu build:
 
@@ -52,19 +52,22 @@ The explorer is an original procedural humanoid with a face, clothing, articulat
 
 ## Run on Android over ADB
 
-With the Linux server running and an Android phone connected through ADB:
+With an Android phone connected through ADB:
 
 ```sh
-adb reverse tcp:7777 tcp:7777
 godot --headless --path client --export-debug Android ../build/grimreach-android.apk
 adb install -r build/grimreach-android.apk
 adb shell monkey -p com.mozrin.grimreach 1
 ```
 
-The ADB reverse command makes the phone's `127.0.0.1:7777` reach the Linux server. In portrait mode, touch open world space and drag in the direction you want to walk. A temporary joystick appears under your thumb; release to stop. Drag with a second finger to turn the camera. For use without ADB, enter the Linux server's reachable IP address in the client.
+The Android client connects to `wss://grimreach.mozrin.com/play` over the internet, so ADB reverse is not needed for normal play. In portrait mode, touch open world space and drag in the direction you want to walk. A temporary joystick appears under your thumb; release to stop. Drag with a second finger to turn the camera.
+
+## Docker and friend testing
+
+Set `TUNNEL_TOKEN` in an untracked root `.env`, then run `docker compose up -d --build`. The tunnel route for `grimreach.mozrin.com/play` must point to `http://grimreach_server:8081`; see [the connector guide](.docker/cloudflared/README.md). The game server and tunnel share the private `appnet` network, with no host ports published. Check `docker compose logs server cloudflared` and the server's `/health` endpoint through a permitted route. Friends can install the native client and connect using the default URL when the tunnel is active.
 
 ## Verification and current limits
 
 The native Ubuntu client and a physical CPH2505 Android phone have run together against the Linux server; its health endpoint reported both players. The Android build rendered the portrait world, the journal and the articulated explorer, and responded to drag movement. The separate analytics client has displayed live positions. `go test ./...`, `go vet ./...`, the Godot smoke scripts in `client/tests`, and both native exports have passed. Run a smoke script from the repository root with `godot --headless --path client --script res://tests/<name>.gd`.
 
-This is a local development prototype. The exploration journal, mineral samples, and Wayfinder trail persist on each client device. Player accounts, server-persistent inventories and quest progress, secure remote networking, player towns, extraction machines, trading, crafting, and combat remain future work. The repository's open issues record any remaining hands-on validation for the existing world features.
+The exploration journal, mineral samples, and Wayfinder trail persist on each client device. Player accounts, server-persistent inventories and quest progress, access controls for invited players, player towns, extraction machines, trading, crafting, and combat remain future work. The repository's open issues record any remaining hands-on validation for the existing world features.

@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -12,6 +13,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/coder/websocket"
 )
 
 type message struct {
@@ -65,21 +68,14 @@ func main() {
 	}
 	defer listener.Close()
 
-	http.HandleFunc("/health", func(response http.ResponseWriter, request *http.Request) {
-		w.mu.Lock()
-		count := len(w.players)
-		tick := w.tick
-		w.mu.Unlock()
-		response.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(response).Encode(message{Type: "health", Count: count, Tick: tick})
-	})
+	httpServer := &http.Server{Addr: *health, Handler: w.httpHandler(), ReadHeaderTimeout: 5 * time.Second}
 	go func() {
-		if err := http.ListenAndServe(*health, nil); err != nil {
-			log.Printf("health server: %v", err)
+		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Printf("HTTP server: %v", err)
 		}
 	}()
-	go w.run()
-	log.Printf("Grimreach world listening on %s; health on %s", *listen, *health)
+	go w.run(context.Background())
+	log.Printf("Grimreach world listening on %s; HTTP and WebSocket on %s", *listen, *health)
 	for {
 		connection, err := listener.Accept()
 		if err != nil {
@@ -88,6 +84,29 @@ func main() {
 		}
 		go w.accept(connection)
 	}
+}
+
+func (w *world) httpHandler() http.Handler {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/health", func(response http.ResponseWriter, request *http.Request) {
+		w.mu.Lock()
+		count := len(w.players)
+		tick := w.tick
+		w.mu.Unlock()
+		response.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(response).Encode(message{Type: "health", Count: count, Tick: tick})
+	})
+	mux.HandleFunc("/play", func(response http.ResponseWriter, request *http.Request) {
+		connection, err := websocket.Accept(response, request, nil)
+		if err != nil {
+			log.Printf("WebSocket upgrade: %v", err)
+			return
+		}
+		stream := websocket.NetConn(context.Background(), connection, websocket.MessageText)
+		connection.SetReadLimit(65536)
+		w.accept(stream)
+	})
+	return mux
 }
 
 func (w *world) accept(connection net.Conn) {
@@ -151,10 +170,15 @@ func (w *world) accept(connection net.Conn) {
 	}
 }
 
-func (w *world) run() {
+func (w *world) run(ctx context.Context) {
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
-	for range ticker.C {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
 		w.mu.Lock()
 		w.tick++
 		players := make([]player, 0, len(w.players))
