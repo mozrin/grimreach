@@ -3,14 +3,16 @@ extends Node3D
 const TERRAIN_SCRIPT = preload("res://world/terrain.gd")
 const JOURNAL_SCRIPT = preload("res://exploration/journal.gd")
 const EXPLORER_SCRIPT = preload("res://character/explorer.gd")
-const PORT := 7777
+const SERVER_URL := "wss://grimreach.mozrin.com/play"
 const MOVE_INTERVAL := 0.1
+const RECONNECT_DELAY := 3.0
 const JOYSTICK_RADIUS := 78.0
 
-var connection := StreamPeerTCP.new()
+var connection := WebSocketPeer.new()
 var connected := false
+var connection_active := false
 var sent_hello := false
-var incoming := ""
+var reconnect_elapsed := 0.0
 var own_id := ""
 var avatars := {}
 var camera_yaw := 0.0
@@ -24,7 +26,6 @@ var terrain
 var journal
 var joystick_visual: Node2D
 var status_label: Label
-var host_edit: LineEdit
 
 
 func _ready() -> void:
@@ -35,12 +36,16 @@ func _ready() -> void:
 	journal.opened.connect(_stop_touch_movement)
 	add_child(journal)
 	_build_avatar("preview", Color(0.95, 0.68, 0.29))
-	_update_status("Disconnected — enter a server address")
+	_update_status("Connecting to grimreach.mozrin.com…")
 	_connect_to_server()
 
 
 func _process(delta: float) -> void:
 	_poll_connection()
+	if not connection_active and not connected:
+		reconnect_elapsed += delta
+		if reconnect_elapsed >= RECONNECT_DELAY:
+			_connect_to_server()
 	for avatar in avatars.values():
 		avatar.advance(delta)
 	if Input.is_key_pressed(KEY_Q):
@@ -98,34 +103,25 @@ func _draw_joystick() -> void:
 
 func _poll_connection() -> void:
 	connection.poll()
-	var state := connection.get_status()
-	if state == StreamPeerTCP.STATUS_CONNECTED and not sent_hello:
+	var state := connection.get_ready_state()
+	if state == WebSocketPeer.STATE_OPEN and not sent_hello:
 		sent_hello = true
 		connected = true
 		_send({"type": "hello", "role": "player"})
 		_update_status("Connected — waiting for world state")
-	elif state == StreamPeerTCP.STATUS_ERROR or (sent_hello and state == StreamPeerTCP.STATUS_NONE):
+	elif state == WebSocketPeer.STATE_CLOSED and connection_active:
 		connected = false
+		connection_active = false
 		sent_hello = false
 		own_id = ""
 		move_touch_index = -1
 		move_touch_offset = Vector2.ZERO
 		joystick_visual.queue_redraw()
-		_update_status("Connection lost")
-	if state != StreamPeerTCP.STATUS_CONNECTED:
+		_update_status("Server unavailable — reconnecting…")
+	if state != WebSocketPeer.STATE_OPEN:
 		return
-	var count := connection.get_available_bytes()
-	if count <= 0:
-		return
-	var result := connection.get_data(count)
-	if result[0] != OK:
-		return
-	incoming += result[1].get_string_from_utf8()
-	while incoming.contains("\n"):
-		var end := incoming.find("\n")
-		var line := incoming.substr(0, end)
-		incoming = incoming.substr(end + 1)
-		var value = JSON.parse_string(line)
+	while connection.get_available_packet_count() > 0:
+		var value = JSON.parse_string(connection.get_packet().get_string_from_utf8())
 		if value is Dictionary:
 			_on_message(value)
 
@@ -182,22 +178,22 @@ func _stop_touch_movement() -> void:
 
 
 func _send(value: Dictionary) -> void:
-	if connection.get_status() == StreamPeerTCP.STATUS_CONNECTED:
-		connection.put_data((JSON.stringify(value) + "\n").to_utf8_buffer())
+	if connection.get_ready_state() == WebSocketPeer.STATE_OPEN:
+		connection.send_text(JSON.stringify(value) + "\n")
 
 
 func _connect_to_server() -> void:
-	if connected:
-		connection.disconnect_from_host()
+	connection = WebSocketPeer.new()
 	connected = false
+	connection_active = false
 	sent_hello = false
-	incoming = ""
-	var host := host_edit.text.strip_edges()
-	if host == "":
-		_update_status("Enter a server address")
-		return
-	var error := connection.connect_to_host(host, PORT)
-	_update_status("Connecting to %s…" % host if error == OK else "Connection failed: %s" % error_string(error))
+	reconnect_elapsed = 0.0
+	var url := OS.get_environment("GRIMREACH_SERVER_URL")
+	if url == "":
+		url = SERVER_URL
+	var error := connection.connect_to_url(url)
+	connection_active = error == OK
+	_update_status("Connecting to Grimreach…" if error == OK else "Connection failed: %s" % error_string(error))
 
 
 func _update_status(value: String) -> void:
@@ -254,15 +250,10 @@ func _build_interface() -> void:
 	var spacer := Control.new()
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	top.add_child(spacer)
-	host_edit = LineEdit.new()
-	host_edit.text = "127.0.0.1"
-	host_edit.placeholder_text = "Server IP"
-	host_edit.custom_minimum_size.x = 190
-	top.add_child(host_edit)
-	var connect_button := Button.new()
-	connect_button.text = "Connect"
-	connect_button.pressed.connect(_connect_to_server)
-	top.add_child(connect_button)
+	var server_label := Label.new()
+	server_label.text = "grimreach.mozrin.com"
+	server_label.add_theme_font_size_override("font_size", 19)
+	top.add_child(server_label)
 	status_label = Label.new()
 	status_label.set_anchors_preset(Control.PRESET_TOP_LEFT)
 	status_label.offset_left = 20

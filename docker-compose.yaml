@@ -1,0 +1,26 @@
+name: grimreach
+
+services:
+  server:
+    build:
+      context: .
+      dockerfile: .docker/server/server.Dockerfile
+    container_name: grimreach_server
+    restart: unless-stopped
+    networks:
+      - appnet
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: grimreach_cloudflared
+    command: ["tunnel", "--no-autoupdate", "run"]
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:?Set TUNNEL_TOKEN in the root .env}
+    depends_on:
+      - server
+    restart: unless-stopped
+    networks:
+      - appnet
+
+networks:
+  appnet:
